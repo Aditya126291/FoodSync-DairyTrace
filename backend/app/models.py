@@ -246,28 +246,106 @@ class SecurityInspection(Base, DictAccessMixin):
 
 
 class ComplaintRecord(Base, DictAccessMixin):
-    """3.7 `complaints` Table — Customer, retailer, and forensic lab complaints with AI Copilot metadata."""
+    """`complaints` Table — customer / retailer / staff complaints filed via the AI Copilot.
+
+    Mirrors the 17-field complaint contract of the reference AI Complaint Management System,
+    relabelled for dairy. Batch-derived fields are populated server-side from the scanned batch.
+    """
 
     __tablename__ = "complaints"
+    __table_args__ = {"sqlite_autoincrement": True}  # ids (and so CC- numbers) are never reused after a delete
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    complaint_ref = Column(String(40), nullable=False, unique=True, index=True)
+    complaint_number = Column(String(50), unique=True, index=True, nullable=False)  # CC-YYYY-NNNN
     batch_id = Column(String(64), nullable=False, index=True)
-    product_name = Column(String(120), nullable=False)
-    reporter_name = Column(String(120), nullable=False)
-    reporter_role = Column(String(80), nullable=False, default="Customer / Retailer")
-    facility_or_store = Column(String(140), nullable=False)
-    complaint_category = Column(String(80), nullable=False, default="Quality / Safety Check")
-    severity = Column(String(20), nullable=False, default="MAJOR", index=True)  # CRITICAL, MAJOR, PRECAUTIONARY
-    status = Column(String(30), nullable=False, default="OPEN", index=True)  # OPEN, UNDER_REVIEW, RECALL_TRIGGERED, RESOLVED
-    fat_percentage = Column(Float, nullable=True)
-    snf_percentage = Column(Float, nullable=True)
-    acidity_percentage = Column(Float, nullable=True)
-    adulterant_status = Column(String(20), nullable=False, default="NOT_TESTED")  # NEGATIVE, POSITIVE, SUSPECTED, NOT_TESTED
-    adulterant_findings = Column(Text, nullable=True)
-    description = Column(Text, nullable=False)
-    intake_mode = Column(String(30), nullable=False, default="MANUAL")  # MANUAL, NATURAL_LANGUAGE, REPORT_UPLOAD
-    source_report_name = Column(String(255), nullable=True)
-    ai_summary = Column(Text, nullable=True)
+    customer_name = Column(String(255), default="")
+    complaint_source = Column(String(255), default="")
+    product_name = Column(String(255), default="")
+    strength_grade = Column(String(100), default="")
+    batch_lot_number = Column(String(100), default="")
+    manufacturing_date = Column(String(100), default="")
+    expiry_date = Column(String(100), default="")
+    affected_quantity = Column(String(100), default="")
+    originating_site = Column(String(255), default="")
+    impacted_material = Column(String(255), default="")
+    complaint_type = Column(String(100), default="")
+    complaint_date = Column(String(100), default="")
+    defect_summary = Column(Text, default="")
+    detailed_description = Column(Text, default="")
+    severity = Column(String(50), default="", index=True)
+    priority = Column(String(50), default="")
+    risk_assessment = Column(Text, default="")
+    root_cause = Column(Text, default="")
+    capa_json = Column(Text, default="[]")
+    # Committed -> Under review -> Recall triggered -> Resolved
+    status = Column(String(30), nullable=False, default="Committed", index=True)
+    reporter_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, nullable=False, default=_utcnow)
+    updated_at = Column(DateTime, nullable=False, default=_utcnow, onupdate=_utcnow)
 
+    def to_dict(self) -> dict[str, Any]:
+        import json
+
+        try:
+            capa = json.loads(self.capa_json or "[]")
+        except (TypeError, ValueError):
+            capa = []
+        return {
+            "id": self.id,
+            "complaintNumber": self.complaint_number,
+            "batchId": self.batch_id,
+            "customerName": self.customer_name,
+            "complaintSource": self.complaint_source,
+            "productName": self.product_name,
+            "strengthGrade": self.strength_grade,
+            "batchLotNumber": self.batch_lot_number,
+            "manufacturingDate": self.manufacturing_date,
+            "expiryDate": self.expiry_date,
+            "affectedQuantity": self.affected_quantity,
+            "originatingSite": self.originating_site,
+            "impactedMaterial": self.impacted_material,
+            "complaintType": self.complaint_type,
+            "complaintDate": self.complaint_date,
+            "defectSummary": self.defect_summary,
+            "detailedDescription": self.detailed_description,
+            "severity": self.severity,
+            "priority": self.priority,
+            "riskAssessment": self.risk_assessment,
+            "rootCause": self.root_cause,
+            "capaRecommendations": capa,
+            "status": self.status,
+            "createdAt": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class User(Base, DictAccessMixin):
+    """`users` Table — staff accounts. Roles: INSPECTOR, QA_OFFICER. Provisioned only via CLI."""
+
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    email = Column(String(160), unique=True, nullable=False, index=True)
+    full_name = Column(String(120), nullable=False)
+    organisation = Column(String(120), nullable=True)
+    role = Column(String(20), nullable=False)  # INSPECTOR | QA_OFFICER
+    password_hash = Column(String(120), nullable=False)
+    is_active = Column(Boolean, nullable=False, default=True)
+    failed_logins = Column(Integer, nullable=False, default=0)
+    locked_until = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=_utcnow)
+    last_login_at = Column(DateTime, nullable=True)
+
+
+class AuditLog(Base, DictAccessMixin):
+    """`audit_log` Table — who did what. Actor comes from the verified token, never from user input."""
+
+    __tablename__ = "audit_log"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    actor_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    actor_label = Column(String(160), nullable=False, default="public")
+    action = Column(String(60), nullable=False, index=True)
+    entity = Column(String(60), nullable=False)
+    entity_id = Column(String(80), nullable=True)
+    detail = Column(String(1000), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=_utcnow)

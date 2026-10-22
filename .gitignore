@@ -8,7 +8,11 @@ __pycache__/
 *.pyc
 .pytest_cache/
 backend/.pytest_cache/
-backend/*_test.db
+
+# Local data & secrets (never commit)
+*.db
+.env
+backend/uploads/
 
 # Build outputs
 dist/

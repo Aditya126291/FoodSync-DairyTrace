@@ -7,7 +7,9 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Batch, ComplaintRecord, RecallEvent
+from app.audit import write_audit
+from app.models import Batch, ComplaintRecord, RecallEvent, User
+from app.security import require_qa, require_staff
 from app.schemas import BlastRadiusResponse, RecallExecuteRequest, RecallSimulateRequest
 from app.services.fssai_export import export_fssai_notice
 from app.services.recall_engine import compute_blast_radius, execute_recall
@@ -15,7 +17,7 @@ from app.services.recall_engine import compute_blast_radius, execute_recall
 router = APIRouter(tags=["Smart Recall Engine"])
 
 
-@router.post("/recall/simulate", response_model=BlastRadiusResponse)
+@router.post("/recall/simulate", response_model=BlastRadiusResponse, dependencies=[Depends(require_staff)])
 def simulate_recall(payload: RecallSimulateRequest, db: Session = Depends(get_db)):
     """
     Computes the blast radius in real time without mutating database state.
@@ -68,7 +70,11 @@ def simulate_recall(payload: RecallSimulateRequest, db: Session = Depends(get_db
 
 
 @router.post("/recall/execute")
-def execute_recall_endpoint(payload: RecallExecuteRequest, db: Session = Depends(get_db)) -> dict[str, Any]:
+def execute_recall_endpoint(
+    payload: RecallExecuteRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_qa),
+) -> dict[str, Any]:
     """
     Commits the recall:
     - Sets root and descendant batches to RECALLED
@@ -82,7 +88,7 @@ def execute_recall_endpoint(payload: RecallExecuteRequest, db: Session = Depends
             root_batch_id=target_id,
             reason=payload.reason,
             severity=payload.severity,
-            initiated_by=payload.initiated_by,
+            initiated_by=f"{user.full_name} ({user.role})"[:80],  # identity from token, never from input
             db_session=db,
         )
         blast = result.get("blast_radius", {})
@@ -94,14 +100,16 @@ def execute_recall_endpoint(payload: RecallExecuteRequest, db: Session = Depends
         )
         if open_complaints:
             for comp in open_complaints:
-                comp.status = "RECALL_TRIGGERED"
-            db.commit()
+                if comp.status != "Resolved":
+                    comp.status = "Recall triggered"
+        write_audit(db, user, "RECALL_EXECUTED", "batch", target_id, payload.reason)
+        db.commit()
         return result
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
-@router.get("/recall/history")
+@router.get("/recall/history", dependencies=[Depends(require_staff)])
 def get_recall_history(db: Session = Depends(get_db)) -> list[dict[str, Any]]:
     """Lists all past recall actions and containment statuses."""
     events = db.query(RecallEvent).order_by(RecallEvent.created_at.desc(), RecallEvent.id.desc()).all()
@@ -123,7 +131,7 @@ def get_recall_history(db: Session = Depends(get_db)) -> list[dict[str, Any]]:
     return results
 
 
-@router.get("/recall/{recall_id}/export-fssai")
+@router.get("/recall/{recall_id}/export-fssai", dependencies=[Depends(require_qa)])
 def export_fssai_recall_notice(
     recall_id: int,
     format: str = Query(default="json", description="Export format: 'json' (includes printable_html) or 'html'"),

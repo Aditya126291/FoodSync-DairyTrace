@@ -126,12 +126,17 @@ def get_public_consumer_passport(batch_id: str, db: Session = Depends(get_db)) -
     active_safety_complaints = (
         db.query(ComplaintRecord)
         .filter(ComplaintRecord.batch_id.in_(related_batch_ids))
-        .filter(not_(ComplaintRecord.status.in_(["RESOLVED", "CLOSED", "REJECTED"])))
+        .filter(not_(ComplaintRecord.status.in_(["Resolved"])))
         .all()
     )
-    reported_safety_statuses = [
-        (item.adulterant_status or "NOT_TESTED").upper() for item in active_safety_complaints
-    ]
+    # Open complaints rated High/Critical raise a precautionary alert; only a Critical complaint
+    # filed by an accredited lab counts as a confirmed positive. Consumer reports never do.
+    reported_safety_statuses = []
+    for item in active_safety_complaints:
+        if (item.severity or "") == "Critical" and (item.complaint_source or "").lower().startswith("lab"):
+            reported_safety_statuses.append("POSITIVE")
+        elif (item.severity or "") in ("High", "Critical"):
+            reported_safety_statuses.append("SUSPECTED")
 
     highest_trust = "UNVERIFIED"
     latest_fat = 22.5 if batch.product_type == "PANEER" else 4.5

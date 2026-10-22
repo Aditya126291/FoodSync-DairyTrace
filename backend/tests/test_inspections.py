@@ -15,7 +15,11 @@ if str(BACKEND_DIR) not in sys.path:
 from app.routers import batches as batch_router  # noqa: E402
 from app.routers import inspections as inspection_router  # noqa: E402
 from app.schemas import BatchCreate  # noqa: E402
+from types import SimpleNamespace  # noqa: E402
+
 from tests.conftest import isolated_db_session  # noqa: E402
+
+INSPECTOR_USER = SimpleNamespace(id=None, full_name="A. Inspector", role="INSPECTOR")
 
 
 def _png_upload(name="seal.png"):
@@ -49,7 +53,8 @@ def _inspection_args(batch_id, **overrides):
         "cold_chain_compliant": True,
         "verdict": "PASSED",
         "notes": "Seal and package are in good condition.",
-        "inspector_name": "A. Inspector",
+        "inspector_name": "ignored-client-supplied-name",
+        "user": INSPECTOR_USER,
         "evidence": None,
         **overrides,
     }
@@ -66,7 +71,7 @@ def test_batch_lookup_and_inspection_history(tmp_path, monkeypatch):
             "PAN-AUDIT-1", evidence=_png_upload(), db=db
         )))
         assert saved["batch_id"] == "PAN-AUDIT-1"
-        assert saved["inspector_name"] == "A. Inspector"
+        assert saved["inspector_name"] == "A. Inspector (INSPECTOR)"
         assert saved["created_at"]
         assert len(saved["record_sha256"]) == 64
         assert saved["evidence_url"]

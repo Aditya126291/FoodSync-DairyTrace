@@ -12,7 +12,9 @@ from PIL import Image, UnidentifiedImageError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Batch, SecurityInspection
+from app.models import Batch, SecurityInspection, User
+from app.audit import write_audit
+from app.security import require_staff
 from app.schemas import SecurityInspectionResponse
 
 router = APIRouter(tags=["Security Inspections"])
@@ -46,9 +48,10 @@ async def create_inspection(
     cold_chain_compliant: bool = Form(...),
     verdict: Literal["PASSED", "FLAGGED", "REJECTED"] = Form(...),
     notes: str = Form(default="", max_length=5000),
-    inspector_name: str = Form(..., min_length=1, max_length=100),
+    inspector_name: Optional[str] = Form(default=None, max_length=100),  # ignored: identity comes from the login token
     evidence: Optional[UploadFile] = File(default=None),
     db: Session = Depends(get_db),
+    user: User = Depends(require_staff),
 ):
     """Persist an inspector's physical security check and optional photo evidence."""
     batch = db.query(Batch).filter_by(id=batch_id).first()
@@ -83,7 +86,7 @@ async def create_inspection(
         saved_path = UPLOAD_DIR / evidence_filename
         saved_path.write_bytes(evidence_bytes)
 
-    clean_name = inspector_name.strip()
+    clean_name = f"{user.full_name} ({user.role})"[:100]
     if not clean_name:
         if saved_path:
             saved_path.unlink(missing_ok=True)
@@ -118,6 +121,7 @@ async def create_inspection(
         record.record_sha256 = hashlib.sha256(
             json.dumps(canonical, sort_keys=True, separators=(",", ":")).encode("utf-8")
         ).hexdigest()
+        write_audit(db, user, "INSPECTION_LOGGED", "batch", batch_id, verdict)
         db.commit()
         db.refresh(record)
     except Exception:
@@ -128,7 +132,7 @@ async def create_inspection(
     return _response(record)
 
 
-@router.get("/inspections", response_model=list[SecurityInspectionResponse])
+@router.get("/inspections", response_model=list[SecurityInspectionResponse], dependencies=[Depends(require_staff)])
 def list_inspections(batch_id: Optional[str] = None, db: Session = Depends(get_db)):
     query = db.query(SecurityInspection)
     if batch_id:
@@ -136,7 +140,7 @@ def list_inspections(batch_id: Optional[str] = None, db: Session = Depends(get_d
     return [_response(record) for record in query.order_by(SecurityInspection.created_at.desc(), SecurityInspection.id.desc()).limit(200).all()]
 
 
-@router.get("/inspections/{inspection_id}/evidence")
+@router.get("/inspections/{inspection_id}/evidence", dependencies=[Depends(require_staff)])
 def get_inspection_evidence(inspection_id: int, db: Session = Depends(get_db)):
     record = db.query(SecurityInspection).filter_by(id=inspection_id).first()
     if not record or not record.evidence_filename:

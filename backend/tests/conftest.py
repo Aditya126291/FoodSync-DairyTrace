@@ -3,6 +3,9 @@
 import os
 import sys
 import warnings
+
+os.environ.setdefault("BCRYPT_ROUNDS", "4")  # fast hashing in tests
+os.environ.setdefault("JWT_SECRET", "test-secret-not-for-production-0123456789")
 from contextlib import contextmanager
 from typing import Generator
 
@@ -58,10 +61,29 @@ def isolated_db_session() -> Generator[Session, None, None]:
         test_engine.dispose()
 
 
+DEMO_PASSWORDS = {"INSPECTOR": ("inspector@dairytrace.demo", "Inspect@2026"), "QA_OFFICER": ("qa@dairytrace.demo", "QaOfficer@2026")}
+
+
+def login_headers(client: TestClient, role: str) -> dict[str, str]:
+    email, password = DEMO_PASSWORDS[role]
+    res = client.post("/api/auth/login", json={"email": email, "password": password})
+    assert res.status_code == 200, res.text
+    return {"Authorization": f"Bearer {res.json()['access_token']}"}
+
+
 @contextmanager
-def isolated_test_client() -> Generator[tuple[TestClient, Session], None, None]:
-    """Context manager yielding a FastAPI TestClient bound to an isolated in-memory SQLite database."""
+def isolated_test_client(role: str | None = "QA_OFFICER") -> Generator[tuple[TestClient, Session], None, None]:
+    """FastAPI TestClient bound to an isolated in-memory DB.
+
+    Demo staff users are seeded; the client is signed in as `role` by default (pass None for anonymous).
+    `client.reseed()` loads the Tech4Food sample genealogy directly through the DB session.
+    """
+    from app.security import reset_rate_limits
+    from app.seed_data import seed_demo_users, seed_tech4food_scenario
+
+    reset_rate_limits()
     session, TestingSessionLocal, test_engine = create_isolated_test_session()
+    seed_demo_users(session)
 
     def _override_get_db():
         db = TestingSessionLocal()
@@ -73,6 +95,10 @@ def isolated_test_client() -> Generator[tuple[TestClient, Session], None, None]:
     app.dependency_overrides[get_db] = _override_get_db
     try:
         with TestClient(app) as client:
+            client.reseed = lambda: seed_tech4food_scenario(session)  # type: ignore[attr-defined]
+            client.login_headers = lambda r: login_headers(client, r)  # type: ignore[attr-defined]
+            if role:
+                client.headers.update(login_headers(client, role))
             yield client, session
     finally:
         app.dependency_overrides.clear()

@@ -3,24 +3,24 @@
 import os
 import sys
 from contextlib import asynccontextmanager
-from typing import Any
-from fastapi import Depends, FastAPI
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
 
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
-from app.database import SessionLocal, engine, get_db, init_db
-from app.models import Batch, ComplaintRecord
-from app.routers import batches, complaints, inspections, public, quality, recall
-from app.seed_data import seed_tech4food_scenario
+from app.complaints import router as complaints_router
+from app.complaints.agent import configured_model, llm_is_configured
+from app.database import engine, init_db
+from app.routers import auth, batches, inspections, public, quality, recall
+from app.security import assert_production_ready
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize SQLite/PostgreSQL schema on application startup."""
+    assert_production_ready()
     init_db()
     yield
     engine.dispose()
@@ -40,12 +40,10 @@ app = FastAPI(
 # Configure CORS middleware for Vite frontend (http://localhost:5173) and local dev tools
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:3000",
-    ],
-    allow_credentials=True,
+    allow_origins=[o.strip() for o in os.getenv(
+        "CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000"
+    ).split(",") if o.strip()],
+    allow_credentials=False,  # Bearer-token auth; no cookies are used
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -55,24 +53,18 @@ app.include_router(batches.router, prefix="/api")
 app.include_router(quality.router, prefix="/api")
 app.include_router(recall.router, prefix="/api")
 app.include_router(inspections.router, prefix="/api")
-app.include_router(complaints.router, prefix="/api")
+app.include_router(complaints_router.router, prefix="/api")
+app.include_router(auth.router, prefix="/api")
 app.include_router(public.router, prefix="/api")
 
 
-@app.post("/api/seed/tech4food", tags=["Demo Seed"])
-def seed_pitch_scenario(db: Session = Depends(get_db)) -> dict[str, Any]:
-    """
-    Wipes the test database and seeds the official Tech4Food 2026 Pitch Deck Scenario
-    (MILK-101, MILK-102, MILK-103, PAN-201, PAN-202, PAN-303, Retailers A, B, C).
-    """
-    return seed_tech4food_scenario(db_session=db)
-
-
 @app.get("/api/health", tags=["System"])
-def health_check() -> dict[str, str]:
+def health_check() -> dict[str, str | None]:
     """System health check endpoint."""
     return {
         "status": "healthy",
         "service": "DairyTrace Smart Recall Engine",
         "team": "FoodSync",
+        "ai_mode": "groq" if llm_is_configured() else "rule-based",
+        "ai_model": configured_model() if llm_is_configured() else None,
     }

@@ -1,7 +1,7 @@
 """Automated End-to-End REST API Test Suite for DairyTrace (`backend/tests/test_api.py`).
 
 Tests every endpoint specified in Section 4 of PROJECT_SPECIFICATION.md:
-- POST /api/seed/tech4food
+- sample genealogy seeding (via DB session)
 - GET /api/batches & POST /api/batches
 - POST /api/batches/link
 - GET /api/batches/{batch_id}/lineage
@@ -30,9 +30,7 @@ def test_seed_and_batches_endpoints(client=None):
     """Tests POST /api/seed/tech4food, GET /api/batches (with filters), and POST /api/batches."""
     def _run(c):
         # 1. Seed the Tech4Food scenario
-        res = c.post("/api/seed/tech4food")
-        assert res.status_code == 200
-        data = res.json()
+        data = c.reseed()
         assert data["status"] == "seeded"
         assert data["batches_created"] == 6
         assert data["links_created"] == 4
@@ -95,7 +93,7 @@ def test_seed_and_batches_endpoints(client=None):
 def test_lineage_link_and_qr_endpoints(client=None):
     """Tests POST /api/batches/link, GET /api/batches/{id}/lineage, and GET /api/batches/{id}/qr."""
     def _run(c):
-        c.post("/api/seed/tech4food")
+        c.reseed()
 
         # 1. Inspect forward lineage from MILK-101
         lin_milk = c.get("/api/batches/MILK-101/lineage")
@@ -158,7 +156,7 @@ def test_lineage_link_and_qr_endpoints(client=None):
 def test_quality_and_distribution_endpoints(client=None):
     """Tests POST /api/quality, GET /api/quality/{batch_id}, POST /api/distribution, and GET /api/distribution."""
     def _run(c):
-        c.post("/api/seed/tech4food")
+        c.reseed()
 
         # 1. Fetch existing quality records for MILK-101
         q_res = c.get("/api/quality/MILK-101")
@@ -215,7 +213,7 @@ def test_quality_and_distribution_endpoints(client=None):
 def test_smart_recall_simulate_execute_history_and_fssai_export(client=None):
     """Tests non-mutating simulation, recall execution, recall history, and FSSAI export endpoints."""
     def _run(c):
-        c.post("/api/seed/tech4food")
+        c.reseed()
 
         # 1. Simulate recall on MILK-101
         sim_res = c.post(
@@ -310,7 +308,7 @@ def test_smart_recall_simulate_execute_history_and_fssai_export(client=None):
 def test_public_consumer_passport_privacy_and_recall_alert(client=None):
     """Tests GET /api/public/passport/{batch_id} before and after recall execution."""
     def _run(c):
-        c.post("/api/seed/tech4food")
+        c.reseed()
 
         # 1. Inspect PAN-201 consumer passport while ACTIVE
         pass_res = c.get("/api/public/passport/PAN-201")

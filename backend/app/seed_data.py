@@ -298,58 +298,63 @@ def seed_tech4food_scenario(db_session: Optional[Session] = None) -> dict[str, A
         ]
         db_session.add_all(distributions)
 
-        # 6. Seed Starter Forensic & Retailer Complaints for Complaints Ledger
+        # 6. Seed starter complaints (same contract as the AI complaint workspace)
         starter_complaints = [
             ComplaintRecord(
-                complaint_ref="CMP-2026-0001",
+                complaint_number="CC-2026-0001",
                 batch_id="MILK-101",
-                product_name="FoodSync Farm-Chilled Raw Milk",
-                reporter_name="Dr. Ananya Deshmukh",
-                reporter_role="NABL Forensic Chemist",
-                facility_or_store="Shirur Collection Centre",
-                complaint_category="Chemical / Mycotoxin Contaminant",
-                severity="CRITICAL",
-                status="OPEN",
-                fat_percentage=4.1,
-                snf_percentage=8.2,
-                acidity_percentage=0.21,
-                adulterant_status="POSITIVE",
-                adulterant_findings=(
-                    "Elevated Aflatoxin M1 residue detected at 0.78 ug/kg via HPLC-FLD "
-                    "(exceeds FSSAI maximum permissible limit of 0.50 ug/kg)."
-                ),
-                description=(
+                customer_name="Dr. Ananya Deshmukh",
+                complaint_source="Lab (NABL)",
+                product_name="Raw Milk",
+                strength_grade="Fat 4.1% / SNF 8.2%",
+                batch_lot_number="MILK-101",
+                affected_quantity="1000 L",
+                originating_site="Shirur Collection Centre",
+                impacted_material="Downstream paneer PAN-201, PAN-202",
+                complaint_type="Chemical / Mycotoxin Contaminant",
+                complaint_date=(base_date + timedelta(hours=8)).strftime("%d %B %Y"),
+                defect_summary="Aflatoxin M1 at 0.78 ug/kg exceeds the FSSAI limit of 0.50 ug/kg.",
+                detailed_description=(
                     "Forensic laboratory confirmation on retained raw milk sample MILK-101 from Shirur Collection Centre "
                     "detected Aflatoxin M1 at 0.78 ug/kg alongside elevated acidity (0.21%). Recommend immediate blast-radius "
                     "simulation for downstream paneer batches PAN-201 and PAN-202."
                 ),
-                intake_mode="REPORT_UPLOAD",
-                source_report_name="NABL_Forensic_Report_MILK-101_Aflatoxin.pdf",
-                ai_summary="[CRITICAL] Chemical / Mycotoxin Contaminant on MILK-101 (Fat 4.1%, SNF 8.2%, Acidity 0.21%) — Adulterant: POSITIVE.",
+                severity="Critical",
+                priority="Urgent",
+                risk_assessment="Critical - mycotoxin residue above permissible limit with downstream paneer exposure.",
+                root_cause="Aflatoxin-contaminated cattle feed supplied to the Shirur catchment.",
+                capa_json='["Immediate Containment: quarantine MILK-101 and all derived paneer.", '
+                          '"Root Cause: test feed lots at contributing farms.", '
+                          '"Preventive Action: add Aflatoxin M1 screening at intake."]',
+                status="Committed",
                 created_at=base_date + timedelta(hours=8),
             ),
             ComplaintRecord(
-                complaint_ref="CMP-2026-0002",
+                complaint_number="CC-2026-0002",
                 batch_id="PAN-201",
-                product_name="FoodSync Fresh Malai Paneer 200g",
-                reporter_name="Rajesh Kulkarni",
-                reporter_role="Retail Store Partner",
-                facility_or_store="Retailer A (Kothrud)",
-                complaint_category="Microbial / Spoilage / Sourness",
-                severity="MAJOR",
-                status="OPEN",
-                fat_percentage=21.2,
-                snf_percentage=25.8,
-                acidity_percentage=0.26,
-                adulterant_status="SUSPECTED",
-                adulterant_findings="High titratable acidity (0.26%) and sour whey separation noted in retail cold counter.",
-                description=(
-                    "Customer and store quality supervisor at Retailer A (Kothrud) reported sour smell and excess whey "
-                    "moisture in 6 packs of Batch PAN-201 during morning shelf check."
+                customer_name="Rajesh Kulkarni",
+                complaint_source="Retailer",
+                product_name="Malai Paneer",
+                strength_grade="200 g pack",
+                batch_lot_number="PAN-201",
+                affected_quantity="6 packs",
+                originating_site="Pune Processing Plant",
+                impacted_material="",
+                complaint_type="Spoilage / Sourness",
+                complaint_date=(base_date + timedelta(hours=8, minutes=30)).strftime("%d %B %Y"),
+                defect_summary="Sour smell and excess whey in 6 packs at Retailer A (Kothrud).",
+                detailed_description=(
+                    "Store quality supervisor at Retailer A (Kothrud) reported sour smell and excess whey "
+                    "moisture in 6 packs of batch PAN-201 during the morning shelf check."
                 ),
-                intake_mode="NATURAL_LANGUAGE",
-                source_report_name=None,
-                ai_summary="[MAJOR] Microbial / Spoilage / Sourness on PAN-201 (Fat 21.2%, SNF 25.8%, Acidity 0.26%) — Adulterant: SUSPECTED.",
+                severity="High",
+                priority="High",
+                risk_assessment="High - possible microbial spoilage or cold-chain failure.",
+                root_cause="Cold-chain excursion or elevated acidity at processing.",
+                capa_json='["Immediate Containment: hold remaining PAN-201 stock at Retailer A.", '
+                          '"Root Cause: review reefer temperature logs.", '
+                          '"Preventive Action: tighten cold-chain monitoring."]',
+                status="Committed",
                 created_at=base_date + timedelta(hours=8, minutes=30),
             ),
         ]
@@ -372,11 +377,42 @@ def seed_tech4food_scenario(db_session: Optional[Session] = None) -> dict[str, A
             db_session.close()
 
 
+def seed_demo_users(db_session: Optional[Session] = None) -> list[str]:
+    """Create the two demo staff accounts if missing. Passwords come from env or documented defaults."""
+    from app.models import User
+    from app.security import ROLE_INSPECTOR, ROLE_QA, hash_password
+
+    owns_session = db_session is None
+    if owns_session:
+        init_db()
+        db_session = SessionLocal()
+    created: list[str] = []
+    try:
+        accounts = [
+            ("inspector@dairytrace.demo", "Priya Nair", "FSSAI Field Inspectorate, Pune", ROLE_INSPECTOR,
+             os.getenv("DEMO_INSPECTOR_PASSWORD", "Inspect@2026")),
+            ("qa@dairytrace.demo", "Vikram Patil", "FoodSync Quality Assurance", ROLE_QA,
+             os.getenv("DEMO_QA_PASSWORD", "QaOfficer@2026")),
+        ]
+        for email, name, org, role, password in accounts:
+            if db_session.query(User).filter_by(email=email).first() is None:
+                db_session.add(User(email=email, full_name=name, organisation=org, role=role,
+                                    password_hash=hash_password(password)))
+                created.append(email)
+        db_session.commit()
+        return created
+    finally:
+        if owns_session:
+            db_session.close()
+
+
 # Alias for convenience
 seed_database = seed_tech4food_scenario
 
 
 if __name__ == "__main__":
+    for _email in seed_demo_users():
+        print(f"[DairyTrace] Created demo user {_email}")
     summary = seed_tech4food_scenario()
     print(f"[DairyTrace] Successfully seeded {summary['scenario']}:")
     print(f"  - Batches ({summary['batches_created']}): {', '.join(summary['batch_ids'])}")

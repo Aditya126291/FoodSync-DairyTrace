@@ -1,0 +1,83 @@
+{
+  "base_url": "http://localhost:5173",
+  "batches": [
+    {
+      "id": "MILK-101",
+      "product": "Farm-chilled cow milk",
+      "type": "Raw milk",
+      "quantity": "1,000 L",
+      "facility": "Shirur Collection Centre",
+      "production_date": "2026-10-22T06:00:00",
+      "expiry_date": "2026-10-24T06:00:00",
+      "status": "Active",
+      "connected_batches": ["PAN-201", "PAN-202"],
+      "quality_note": "Fat 4.6%, SNF 8.7%; adulterant screen negative.",
+      "delivery_note": "Used as an input to paneer batches PAN-201 and PAN-202."
+    },
+    {
+      "id": "MILK-102",
+      "product": "Farm-chilled cow milk",
+      "type": "Raw milk",
+      "quantity": "800 L",
+      "facility": "Junnar Collection Centre",
+      "production_date": "2026-10-22T06:30:00",
+      "expiry_date": "2026-10-24T06:30:00",
+      "status": "Active",
+      "connected_batches": ["PAN-201"],
+      "quality_note": "Fat 4.4%, SNF 8.5%; no adulterants detected.",
+      "delivery_note": "400 L contributed to paneer batch PAN-201; 400 L remained in cold storage."
+    },
+    {
+      "id": "MILK-103",
+      "product": "Farm-chilled cow milk",
+      "type": "Raw milk",
+      "quantity": "500 L",
+      "facility": "Baramati Chilling Centre",
+      "production_date": "2026-10-22T07:00:00",
+      "expiry_date": "2026-10-24T07:00:00",
+      "status": "Active",
+      "connected_batches": ["PAN-303"],
+      "quality_note": "Fat 4.7%, SNF 8.8%; control batch tests passed.",
+      "delivery_note": "Used as an input to paneer batch PAN-303."
+    },
+    {
+      "id": "PAN-201",
+      "product": "Fresh malai paneer",
+      "type": "Finished paneer",
+      "quantity": "120 kg",
+      "facility": "FoodSync Central Dairy Plant, Pune",
+      "production_date": "2026-10-22T10:00:00",
+      "expiry_date": "2026-11-05T10:00:00",
+      "status": "Active",
+      "connected_batches": ["MILK-101", "MILK-102"],
+      "quality_note": "Fat 24.5%, SNF 28.0%; adulterant screen negative.",
+      "delivery_note": "60 kg to Retailer A (Kothrud) and 60 kg to Retailer B (Wakad), Pune."
+    },
+    {
+      "id": "PAN-202",
+      "product": "Fresh malai paneer",
+      "type": "Finished paneer",
+      "quantity": "90 kg",
+      "facility": "FoodSync Central Dairy Plant, Pune",
+      "production_date": "2026-10-22T11:00:00",
+      "expiry_date": "2026-11-05T11:00:00",
+      "status": "Active",
+      "connected_batches": ["MILK-101"],
+      "quality_note": "Fat 24.2%, SNF 27.8%; release check passed.",
+      "delivery_note": "90 kg to Retailer C (Hinjawadi), Pune."
+    },
+    {
+      "id": "PAN-303",
+      "product": "Fresh malai paneer · control batch",
+      "type": "Finished paneer",
+      "quantity": "150 kg",
+      "facility": "FoodSync Central Dairy Plant, Pune",
+      "production_date": "2026-10-22T12:00:00",
+      "expiry_date": "2026-11-05T12:00:00",
+      "status": "Active · control",
+      "connected_batches": ["MILK-103"],
+      "quality_note": "Fat 25.0%, SNF 28.5%; control batch tests passed.",
+      "delivery_note": "150 kg remains in cold storage; no retail delivery is recorded."
+    }
+  ]
+}

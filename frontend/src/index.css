@@ -1,0 +1,140 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    background-color: #f7f8f4;
+    color: #1c2420;
+    min-height: 100vh;
+  }
+
+  button,
+  input,
+  select {
+    font: inherit;
+  }
+
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible {
+    outline: 3px solid rgb(22 101 52 / 45%);
+    outline-offset: 2px;
+  }
+}
+
+.welcome-hero {
+  min-height: 340px;
+  background-color: #f1eddc;
+  background-image: url('/dairytrace-farm-hero.png');
+  background-position: center right;
+  background-repeat: no-repeat;
+  background-size: cover;
+  animation: hero-arrive 700ms cubic-bezier(.2,.75,.25,1) both;
+}
+
+.welcome-hero__wash {
+  background: linear-gradient(90deg, rgb(255 253 247 / 98%) 0%, rgb(255 253 247 / 94%) 42%, rgb(255 253 247 / 76%) 66%, rgb(255 253 247 / 0%) 88%);
+}
+
+.welcome-hero__content {
+  animation: content-arrive 600ms 100ms ease-out both;
+}
+
+main {
+  animation: content-arrive 420ms ease-out both;
+}
+
+::selection {
+  color: #fff;
+  background: #166534;
+}
+
+@keyframes hero-arrive {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes content-arrive {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.scan-corner {
+  position: absolute;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-color: #d6f5a8;
+  border-radius: .45rem;
+}
+
+.scan-line {
+  position: absolute;
+  left: 7%;
+  right: 7%;
+  top: 12%;
+  height: 2px;
+  background: #d6f5a8;
+  box-shadow: 0 0 14px #d6f5a8;
+  animation: scan-sweep 2.4s ease-in-out infinite alternate;
+}
+
+@keyframes scan-sweep {
+  from { transform: translateY(0); }
+  to { transform: translateY(10rem); }
+}
+
+.panel-enter {
+  animation: content-arrive 260ms ease-out both;
+}
+
+@media (max-width: 640px) {
+  .welcome-hero {
+    min-height: 365px;
+    background-position: 61% center;
+  }
+
+  .welcome-hero__wash {
+    background: linear-gradient(90deg, rgb(255 253 247 / 98%) 0%, rgb(255 253 247 / 93%) 70%, rgb(255 253 247 / 62%) 100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+/* Warm, subtle custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F3EDE2;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #D1C7B7;
+  border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #B5A895;
+}

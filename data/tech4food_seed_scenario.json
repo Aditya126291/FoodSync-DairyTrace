@@ -1,0 +1,202 @@
+{
+  "scenario": "Tech4Food 2026 Official Pitch Demo Scenario",
+  "team": "FoodSync (Saloni Gupta, Vikash Kumar, Aditya Kumar)",
+  "batches": [
+    {
+      "id": "MILK-101",
+      "product_type": "MILK",
+      "initial_quantity": 1000.0,
+      "remaining_quantity": 0.0,
+      "facility_name": "Shirur Collection Centre",
+      "status": "ACTIVE",
+      "role": "Contaminated / Flagged Batch"
+    },
+    {
+      "id": "MILK-102",
+      "product_type": "MILK",
+      "initial_quantity": 800.0,
+      "remaining_quantity": 400.0,
+      "facility_name": "Junnar Collection Centre",
+      "status": "ACTIVE",
+      "role": "Co-input Batch (Safe raw milk mixed into vat)"
+    },
+    {
+      "id": "MILK-103",
+      "product_type": "MILK",
+      "initial_quantity": 500.0,
+      "remaining_quantity": 0.0,
+      "facility_name": "Baramati Chilling Centre",
+      "status": "ACTIVE",
+      "role": "Control Raw Milk Batch"
+    },
+    {
+      "id": "PAN-201",
+      "product_type": "PANEER",
+      "initial_quantity": 120.0,
+      "remaining_quantity": 0.0,
+      "facility_name": "FoodSync Central Dairy Plant, Pune",
+      "status": "ACTIVE",
+      "role": "Affected Finished Batch 1 (Made from MILK-101 + MILK-102)"
+    },
+    {
+      "id": "PAN-202",
+      "product_type": "PANEER",
+      "initial_quantity": 90.0,
+      "remaining_quantity": 0.0,
+      "facility_name": "FoodSync Central Dairy Plant, Pune",
+      "status": "ACTIVE",
+      "role": "Affected Finished Batch 2 (Made from MILK-101 alone)"
+    },
+    {
+      "id": "PAN-303",
+      "product_type": "PANEER",
+      "initial_quantity": 150.0,
+      "remaining_quantity": 150.0,
+      "facility_name": "FoodSync Central Dairy Plant, Pune",
+      "status": "ACTIVE",
+      "role": "Safe Control Batch (Must NOT be flagged)"
+    }
+  ],
+  "batch_links": [
+    {
+      "parent_batch_id": "MILK-101",
+      "child_batch_id": "PAN-201",
+      "quantity_used": 600.0,
+      "unit": "L"
+    },
+    {
+      "parent_batch_id": "MILK-102",
+      "child_batch_id": "PAN-201",
+      "quantity_used": 400.0,
+      "unit": "L"
+    },
+    {
+      "parent_batch_id": "MILK-101",
+      "child_batch_id": "PAN-202",
+      "quantity_used": 400.0,
+      "unit": "L"
+    },
+    {
+      "parent_batch_id": "MILK-103",
+      "child_batch_id": "PAN-303",
+      "quantity_used": 500.0,
+      "unit": "L"
+    }
+  ],
+  "quality_records": [
+    {
+      "batch_id": "MILK-101",
+      "lab_name": "Shirur Collection Rapid Lactometer Desk",
+      "fat_percentage": 4.5,
+      "snf_percentage": 8.6,
+      "acidity": 0.14,
+      "adulterant_test": "NEGATIVE",
+      "contaminant_details": "Rapid intake screen clear for urea, starch, and neutralizers.",
+      "trust_level": "SUPPLIER_ENTERED",
+      "certificate_url": null
+    },
+    {
+      "batch_id": "MILK-101",
+      "lab_name": "Pune Regional Dairy Quality Lab (NABL Accredited)",
+      "fat_percentage": 4.6,
+      "snf_percentage": 8.7,
+      "acidity": 0.14,
+      "adulterant_test": "NEGATIVE",
+      "contaminant_details": "Standard physicochemical & MBRT parameters verified prior to vat pooling.",
+      "trust_level": "VERIFIED",
+      "certificate_url": "https://certs.dairytrace.in/2026/NABL-M101-VERIFIED.pdf"
+    },
+    {
+      "batch_id": "MILK-102",
+      "lab_name": "Junnar Co-op Quality Testing Lab",
+      "fat_percentage": 4.4,
+      "snf_percentage": 8.5,
+      "acidity": 0.13,
+      "adulterant_test": "NEGATIVE",
+      "contaminant_details": "No adulterants detected; certificate attached.",
+      "trust_level": "DOCUMENT_CHECKED",
+      "certificate_url": "https://certs.dairytrace.in/2026/JUNNAR-M102-DOC.pdf"
+    },
+    {
+      "batch_id": "MILK-103",
+      "lab_name": "Pune Regional Dairy Quality Lab (NABL Accredited)",
+      "fat_percentage": 4.7,
+      "snf_percentage": 8.8,
+      "acidity": 0.13,
+      "adulterant_test": "NEGATIVE",
+      "contaminant_details": "100% compliant across Fat, SNF, MBRT, and antibiotic residue panels.",
+      "trust_level": "VERIFIED",
+      "certificate_url": "https://certs.dairytrace.in/2026/NABL-M103-VERIFIED.pdf"
+    },
+    {
+      "batch_id": "PAN-201",
+      "lab_name": "FoodSync Central QA Lab, Pune",
+      "fat_percentage": 24.5,
+      "snf_percentage": 28.0,
+      "acidity": 0.18,
+      "adulterant_test": "NEGATIVE",
+      "contaminant_details": "Moisture 52.4% (within FSSAI max 60% limit for Chhana/Paneer).",
+      "trust_level": "VERIFIED",
+      "certificate_url": "https://certs.dairytrace.in/2026/QA-PAN201.pdf"
+    },
+    {
+      "batch_id": "PAN-202",
+      "lab_name": "FoodSync Central QA Lab, Pune",
+      "fat_percentage": 24.2,
+      "snf_percentage": 27.8,
+      "acidity": 0.19,
+      "adulterant_test": "NEGATIVE",
+      "contaminant_details": "Batch release QA check passed.",
+      "trust_level": "DOCUMENT_CHECKED",
+      "certificate_url": "https://certs.dairytrace.in/2026/QA-PAN202.pdf"
+    },
+    {
+      "batch_id": "PAN-303",
+      "lab_name": "Pune Regional Dairy Quality Lab (NABL Accredited)",
+      "fat_percentage": 25.0,
+      "snf_percentage": 28.5,
+      "acidity": 0.17,
+      "adulterant_test": "NEGATIVE",
+      "contaminant_details": "Gold-standard control batch; NABL chemist signed off.",
+      "trust_level": "VERIFIED",
+      "certificate_url": "https://certs.dairytrace.in/2026/NABL-PAN303.pdf"
+    }
+  ],
+  "distribution_records": [
+    {
+      "batch_id": "PAN-201",
+      "destination_name": "Retailer A (Kothrud)",
+      "destination_type": "RETAILER",
+      "location": "Kothrud, Pune, MH",
+      "quantity_dispatched": 60.0,
+      "contact_phone": "+91-9822011101"
+    },
+    {
+      "batch_id": "PAN-201",
+      "destination_name": "Retailer B (Wakad)",
+      "destination_type": "RETAILER",
+      "location": "Wakad, Pune, MH",
+      "quantity_dispatched": 60.0,
+      "contact_phone": "+91-9822011102"
+    },
+    {
+      "batch_id": "PAN-202",
+      "destination_name": "Retailer C (Hinjawadi)",
+      "destination_type": "RETAILER",
+      "location": "Hinjawadi, Pune, MH",
+      "quantity_dispatched": 90.0,
+      "contact_phone": "+91-9822011103"
+    }
+  ],
+  "expected_blast_radius_for_MILK_101": {
+    "root_batch": "MILK-101",
+    "affected_product_batches": ["PAN-201", "PAN-202"],
+    "co_input_batches_for_review": ["MILK-102"],
+    "unaffected_control_batches": ["MILK-103", "PAN-303"],
+    "compromised_retailers": [
+      "Retailer A (Kothrud)",
+      "Retailer B (Wakad)",
+      "Retailer C (Hinjawadi)"
+    ]
+  }
+}

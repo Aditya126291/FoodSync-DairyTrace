@@ -1,89 +1,111 @@
 import React from 'react';
-import { ChevronLeft, FlaskConical, Milk, MoreHorizontal, Plus, RotateCcw } from 'lucide-react';
+import { LayoutDashboard, LogOut, Milk, QrCode, ShieldCheck, UserCheck } from 'lucide-react';
+import { useAuth } from '../auth/AuthContext';
 
 export default function Navbar({
-  currentView,
-  setCurrentView,
-  onOpenCreateBatchModal,
-  onOpenComplaintModal,
-  onReloadPitchScenario,
-  isRefreshing,
+  onNavigateDashboard,
+  onNavigateScanner,
+  onLogout,
+  activeView = 'dashboard',
 }) {
-  const isPassport = currentView === 'passport';
+  const { user, isQA } = useAuth();
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-stone-200/80 bg-[#fffdf9]/95 backdrop-blur-xl print:hidden">
+    <header className="sticky top-0 z-40 w-full border-b border-stone-200/90 bg-[#fffdf9]/95 backdrop-blur-xl print:hidden">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:h-20 sm:px-6 lg:px-8">
         <button
           type="button"
-          onClick={() => setCurrentView('dashboard')}
-          aria-label={isPassport ? 'Back to DairyTrace workspace' : 'DairyTrace workspace home'}
+          onClick={onNavigateDashboard}
+          aria-label="DairyTrace staff dashboard home"
           className="group flex min-w-0 items-center gap-3 rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2"
         >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-800 text-white shadow-sm transition duration-200 group-hover:-rotate-3 group-hover:scale-105">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-900 text-white shadow-sm transition duration-200 group-hover:-rotate-3 group-hover:scale-105">
             <Milk className="h-5 w-5" />
           </span>
           <span className="min-w-0">
-            <span className="block truncate font-display text-xl font-semibold tracking-tight text-stone-900">DairyTrace</span>
-            <span className="block text-[11px] font-medium text-stone-500">{isPassport ? 'Product information' : 'Farm to your table'}</span>
+            <span className="block truncate font-display text-xl font-bold tracking-tight text-stone-900">
+              DairyTrace
+            </span>
+            <span className="block text-[11px] font-medium text-stone-500">
+              Staff Traceability &amp; Audit Workspace
+            </span>
           </span>
         </button>
 
-        {isPassport ? (
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          {activeView !== 'dashboard' && (
+            <button
+              type="button"
+              onClick={onNavigateDashboard}
+              className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 text-xs font-bold text-stone-700 shadow-sm transition hover:bg-stone-50 hover:text-stone-950"
+            >
+              <LayoutDashboard className="h-3.5 w-3.5 text-emerald-800" />
+              <span>Dashboard</span>
+            </button>
+          )}
+
+          {onNavigateScanner && (
+            <button
+              type="button"
+              onClick={onNavigateScanner}
+              className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 text-xs font-bold text-stone-700 shadow-sm transition hover:bg-stone-50 hover:text-stone-950"
+              title="Open landing QR scanner in staff mode"
+            >
+              <QrCode className="h-3.5 w-3.5 text-emerald-800" />
+              <span className="hidden sm:inline">QR Scanner</span>
+            </button>
+          )}
+
+          {user && (
+            <div className="flex items-center gap-2.5 rounded-2xl border border-stone-200 bg-white px-3 py-1.5 shadow-sm">
+              <span
+                className={`grid h-7 w-7 place-items-center rounded-xl text-xs font-bold ${
+                  isQA
+                    ? 'bg-amber-100 text-amber-900 border border-amber-200'
+                    : 'bg-emerald-100 text-emerald-900 border border-emerald-200'
+                }`}
+              >
+                {isQA ? <ShieldCheck className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
+              </span>
+              <div className="hidden text-left sm:block">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-stone-900">{user.full_name}</span>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider ${
+                      isQA
+                        ? 'bg-amber-100 text-amber-900 border border-amber-200'
+                        : 'bg-emerald-100 text-emerald-900 border border-emerald-200'
+                    }`}
+                  >
+                    {isQA ? 'QA Officer' : 'Inspector'}
+                  </span>
+                </div>
+                {user.organisation && (
+                  <span className="block text-[10px] text-stone-500 truncate max-w-[180px]">
+                    {user.organisation}
+                  </span>
+                )}
+              </div>
+              <span
+                className={`sm:hidden rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase ${
+                  isQA ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'
+                }`}
+              >
+                {isQA ? 'QA' : 'INSP'}
+              </span>
+            </div>
+          )}
+
           <button
             type="button"
-            onClick={() => setCurrentView('dashboard')}
-            className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl px-3 text-sm font-semibold text-stone-600 transition hover:bg-stone-100 hover:text-stone-900"
+            onClick={onLogout}
+            aria-label="Sign out of staff session"
+            className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-stone-300 bg-white px-3 text-xs font-bold text-stone-700 transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-800"
           >
-            <ChevronLeft className="h-4 w-4" />
-            <span className="hidden sm:inline">Workspace</span>
-            <span className="sm:hidden">Back</span>
+            <LogOut className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Sign out</span>
           </button>
-        ) : (
-          <div className="flex shrink-0 items-center gap-2">
-            <button
-              type="button"
-              onClick={onOpenComplaintModal}
-              aria-label="Raise complaint or forensic lab report"
-              className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-stone-300 bg-white px-3 text-sm font-semibold text-stone-700 shadow-sm transition hover:border-emerald-600 hover:bg-emerald-50 hover:text-emerald-900 sm:px-3.5"
-            >
-              <FlaskConical className="h-4 w-4 text-emerald-800" />
-              <span className="hidden sm:inline">Complaints &amp; Reports</span>
-              <span className="sm:hidden">Complaints</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={onOpenCreateBatchModal}
-              aria-label="Add a batch"
-              className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-emerald-800 px-3 text-sm font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-emerald-900 sm:px-4"
-            >
-              <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">Add batch</span>
-              <span className="sm:hidden">Add</span>
-            </button>
-
-            <details className="relative">
-              <summary className="flex min-h-10 cursor-pointer list-none items-center justify-center gap-1 rounded-xl px-2.5 text-sm font-semibold text-stone-600 transition hover:bg-stone-100 hover:text-stone-900 [&::-webkit-details-marker]:hidden">
-                <MoreHorizontal className="h-5 w-5" />
-                <span className="hidden sm:inline">More</span>
-                <span className="sr-only sm:hidden">Workspace options</span>
-              </summary>
-              <div className="absolute right-0 top-12 z-50 w-56 rounded-xl border border-stone-200 bg-white p-1.5 shadow-lg">
-                <button
-                  type="button"
-                  onClick={onReloadPitchScenario}
-                  disabled={isRefreshing}
-                  aria-label="Reset sample dairy batches"
-                  className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm font-semibold text-stone-700 transition hover:bg-stone-50 disabled:opacity-60"
-                >
-                  <RotateCcw className={`h-4 w-4 text-stone-500 ${isRefreshing ? 'animate-spin' : ''}`} />
-                  Reset demo data
-                </button>
-              </div>
-            </details>
-          </div>
-        )}
+        </div>
       </div>
     </header>
   );

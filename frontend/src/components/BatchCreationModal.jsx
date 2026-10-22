@@ -225,41 +225,6 @@ export default function BatchCreationModal({
     }
   };
 
-  const handleInitiateRandomBatch = async (type = null) => {
-    setLoading(true);
-    setSuccessMsg('');
-    setErrorMsg('');
-    try {
-      const newBatch = await api.initiateRandomBatch(type);
-      const passportUrl =
-        newBatch.passport_url ||
-        `${typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173'}/passport/${newBatch.id}`;
-
-      const fullAllotment = {
-        ...newBatch,
-        passport_url: passportUrl,
-        qr_code_url: `/api/batches/${newBatch.id}/qr`,
-        quality_summary:
-          newBatch.product_type === 'PANEER'
-            ? 'Fat 24.2% · SNF 28.0% · Acidity 0.18% · Chemist Verified'
-            : 'Fat 4.5% · SNF 8.7% · Acidity 0.14% · Chemist Verified',
-        lab_name:
-          newBatch.product_type === 'PANEER'
-            ? 'FoodSync Central QA Lab, Pune'
-            : 'Pune Regional Dairy Quality Lab',
-        trust_level: 'VERIFIED',
-      };
-
-      setAllottedBatch(fullAllotment);
-      setActiveTab('confirmation');
-      if (onBatchCreated) onBatchCreated(fullAllotment);
-    } catch (err) {
-      setErrorMsg(err.message || 'Could not randomly initiate batch.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleCopyPassportUrl = () => {
     if (!allottedBatch?.passport_url) return;
     navigator.clipboard.writeText(allottedBatch.passport_url);
@@ -269,17 +234,13 @@ export default function BatchCreationModal({
 
   const handleDownloadQr = () => {
     if (!allottedBatch?.id) return;
-    const downloadUrl = `/api/batches/${encodeURIComponent(allottedBatch.id)}/qr?format=png`;
+    const downloadUrl = api.getBatchQrUrl(allottedBatch.id, 'png');
     const a = document.createElement('a');
     a.href = downloadUrl;
     a.download = `DairyTrace-QR-${allottedBatch.id}.png`;
     document.body.appendChild(a);
     a.click();
     a.remove();
-  };
-
-  const handlePrintLabel = () => {
-    window.print();
   };
 
   const handleTestScanPassport = () => {
@@ -314,14 +275,14 @@ export default function BatchCreationModal({
                     ? 'Batch Allotment & QR Confirmation'
                     : 'Add Dairy Batch & Designate QR'}
                 </h3>
-                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-900">
-                  Inspector
+                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
+                  QA Officer
                 </span>
               </div>
               <p className="text-xs sm:text-sm text-stone-600 mt-0.5">
                 {activeTab === 'confirmation'
-                  ? 'Official allotment certificate and designated QR code for the uploading inspector.'
-                  : 'Record a collection, craft paneer, or randomly initiate an audit batch.'}
+                  ? 'Official allotment certificate and designated QR code for the QA officer.'
+                  : 'Record a raw milk collection or craft a linked paneer batch.'}
               </p>
             </div>
           </div>
@@ -339,6 +300,7 @@ export default function BatchCreationModal({
         {activeTab !== 'confirmation' && (
           <div className="flex flex-wrap border-b border-stone-200 bg-stone-100/70 p-1.5 gap-2 shrink-0">
             <button
+              type="button"
               onClick={() => setActiveTab('raw_milk')}
               className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all ${
                 activeTab === 'raw_milk'
@@ -350,6 +312,7 @@ export default function BatchCreationModal({
               1. Record Milk Collection
             </button>
             <button
+              type="button"
               onClick={() => setActiveTab('process_paneer')}
               className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all ${
                 activeTab === 'process_paneer'
@@ -359,15 +322,6 @@ export default function BatchCreationModal({
             >
               <Package className="w-4 h-4 text-amber-700" />
               2. Craft Paneer Batch
-            </button>
-            <button
-              onClick={() => handleInitiateRandomBatch()}
-              disabled={loading}
-              title="Quickly initiate a randomized batch in backend with designated QR"
-              className="flex items-center justify-center gap-1.5 py-2 px-3.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-stone-950 shadow-sm transition-all disabled:opacity-60"
-            >
-              <Sparkles className="w-3.5 h-3.5 fill-stone-950" />
-              {loading ? 'Initiating…' : 'Random Batch'}
             </button>
           </div>
         )}

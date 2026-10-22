@@ -55,9 +55,9 @@ cd backend
    - **Public Consumer (Not signed in):** Scanning or entering a batch code (e.g. `PAN-201`) opens the public **Product Passport** (`/passport/PAN-201`) showing 3-tier verification status, purity metrics, and farm-to-pack cooperative lineage.
    - **Signed-In Staff (`INSPECTOR` or `QA_OFFICER`):** Using the same scanner routes directly into the **Staff Batch Audit Workspace** (`/staff/batch/PAN-201`).
 2. **Two-Panel AI Complaint Management System (`/passport/:id/report` & `/staff/batch/:id/report`)**:
-   - Every complaint is pre-bound to a scanned QR batch (`batchLotNumber`, `productCode`, `productDescription`, `manufacturingSite`, `manufacturingDate`, and `expiryDate` are auto-filled from the batch record and locked).
+   - Every complaint is pre-bound to a scanned QR batch (`productName`, `batchLotNumber`, `manufacturingDate`, `expiryDate`, and `originatingSite` are auto-filled from the batch record and locked, and `strengthGrade` defaults from batch quality records).
    - **Left Panel:** 17-field structured complaint record + Risk Assessment, Root Cause Hypothesis, and CAPA checklist, with green AI-updated field highlights.
-   - **Right Panel:** AI Copilot chat supporting natural-language complaint intake, partial field updates, quick-action prompts, and drag-and-drop file upload (`.pdf`, `.docx`, `.csv`, `.txt`). Uses Groq Llama 3.3 70B when `GROQ_API_KEY` is configured in `backend/.env`, with automatic deterministic fallback.
+   - **Right Panel:** AI Copilot chat supporting natural-language complaint intake, partial field updates, quick-action prompts, and drag-and-drop file upload (`.pdf`, `.docx`, `.txt`, `.eml`). Uses Groq Llama 3.3 70B when `GROQ_API_KEY` is configured in `backend/.env`, with automatic deterministic fallback.
 3. **Smart BFS Recall Engine & FSSAI FoSCoS Export**:
    - Simulates downstream finished paneer batches (`PAN-201`, `PAN-202`), co-input milk quarantine alerts (`MILK-102`), untouched control batches (`PAN-303`), and retail store lockdown lists in milliseconds.
    - QA Officers can execute the recall and export a print-ready statutory **FSSAI Schedule-I Recall Notice**.

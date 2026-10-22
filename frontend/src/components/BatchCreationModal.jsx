@@ -28,6 +28,7 @@ export default function BatchCreationModal({
   existingBatches = [],
   onBatchCreated,
   onViewPassport,
+  onOpenBatchAudit,
 }) {
   const [activeTab, setActiveTab] = useState('raw_milk'); // 'raw_milk' | 'process_paneer' | 'confirmation'
   const [loading, setLoading] = useState(false);
@@ -504,6 +505,9 @@ export default function BatchCreationModal({
                   <button
                     type="button"
                     onClick={() => {
+                      if (onOpenBatchAudit && allottedBatch?.id) {
+                        onOpenBatchAudit(allottedBatch.id);
+                      }
                       onClose();
                     }}
                     className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold shadow-sm transition"

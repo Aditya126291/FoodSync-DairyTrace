@@ -1,10 +1,9 @@
 import React from 'react';
-import { LayoutDashboard, LogOut, Milk, QrCode, ShieldCheck, UserCheck } from 'lucide-react';
+import { LayoutDashboard, LogOut, Milk, ShieldCheck, UserCheck } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 
 export default function Navbar({
   onNavigateDashboard,
-  onNavigateScanner,
   onLogout,
   activeView = 'dashboard',
 }) {
@@ -41,18 +40,6 @@ export default function Navbar({
             >
               <LayoutDashboard className="h-3.5 w-3.5 text-emerald-800" />
               <span>Dashboard</span>
-            </button>
-          )}
-
-          {onNavigateScanner && (
-            <button
-              type="button"
-              onClick={onNavigateScanner}
-              className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 text-xs font-bold text-stone-700 shadow-sm transition hover:bg-stone-50 hover:text-stone-950"
-              title="Open landing QR scanner in staff mode"
-            >
-              <QrCode className="h-3.5 w-3.5 text-emerald-800" />
-              <span className="hidden sm:inline">QR Scanner</span>
             </button>
           )}
 

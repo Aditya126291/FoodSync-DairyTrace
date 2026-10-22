@@ -849,7 +849,14 @@ export default function InspectorHub({
                 onCancel={() => setFormOpen(false)}
                 onSubmitted={async () => {
                   setFormOpen(false);
-                  await loadHistory(selectedBatch.id);
+                  await Promise.all([
+                    loadHistory(selectedBatch.id),
+                    api
+                      .getInspections()
+                      .then((checks) => setGlobalInspections(checks || []))
+                      .catch(() => {}),
+                    onRefreshBatches?.(),
+                  ]);
                   onNotify('Security check saved to the batch audit history.');
                 }}
               />

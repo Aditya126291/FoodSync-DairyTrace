@@ -88,7 +88,7 @@ export default function RecallModal({
     if (isOpen && initialBatchId) {
       const cleanId = initialBatchId;
       setTargetBatchId(cleanId);
-      setConfirmBatchInput(cleanId);
+      setConfirmBatchInput('');
       const startingReason =
         initialReason ||
         'Elevated Aflatoxin M1 detected (0.78 ug/kg > FSSAI safe limit 0.50 ug/kg)';
@@ -172,7 +172,7 @@ export default function RecallModal({
                 onChange={(e) => {
                   const nextId = e.target.value;
                   setTargetBatchId(nextId);
-                  setConfirmBatchInput(nextId);
+                  setConfirmBatchInput('');
                   setExecutedEvent(null);
                   handleSimulate(nextId);
                 }}

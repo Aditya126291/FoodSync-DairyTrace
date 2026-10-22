@@ -306,7 +306,6 @@ function AppShell() {
           <Navbar
             activeView={route.view === 'staff-dashboard' ? 'dashboard' : 'batch'}
             onNavigateDashboard={() => navigate('/staff')}
-            onNavigateScanner={() => navigate('/')}
             onLogout={handleLogout}
           />
 
@@ -364,6 +363,7 @@ function AppShell() {
               existingBatches={batches}
               onBatchCreated={handleBatchCreated}
               onViewPassport={onViewPassport}
+              onOpenBatchAudit={onSelectStaffBatch}
             />
           )}
 

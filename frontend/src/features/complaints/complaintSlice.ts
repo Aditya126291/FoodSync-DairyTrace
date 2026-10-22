@@ -4,6 +4,9 @@ import type { SavedComplaintRecord } from './api';
 export interface ComplaintState {
   form: ComplaintForm;
   lockedContext: LockedBatchContext;
+  defaultSource: string;
+  defaultCustomerName: string;
+  defaultStrengthGrade: string;
   status: 'Draft' | 'Pending Triage' | 'Saved';
   changedFields: string[];
   lastSavedNumber: string | null;
@@ -21,6 +24,9 @@ const emptyLocked: LockedBatchContext = {
 export const initialComplaintState: ComplaintState = {
   form: { ...emptyComplaint },
   lockedContext: { ...emptyLocked },
+  defaultSource: '',
+  defaultCustomerName: '',
+  defaultStrengthGrade: '',
   status: 'Pending Triage',
   changedFields: [],
   lastSavedNumber: null,
@@ -30,7 +36,15 @@ export const initialComplaintState: ComplaintState = {
 export type ComplaintAction =
   | { type: 'complaint/updateField'; payload: { field: keyof ComplaintForm; value: string } }
   | { type: 'complaint/applyPatch'; payload: Partial<ComplaintForm> }
-  | { type: 'complaint/setLockedContext'; payload: { locked: LockedBatchContext; defaultSource?: string; defaultCustomerName?: string } }
+  | {
+      type: 'complaint/setLockedContext';
+      payload: {
+        locked: LockedBatchContext;
+        defaultSource?: string;
+        defaultCustomerName?: string;
+        defaultStrengthGrade?: string;
+      };
+    }
   | { type: 'complaint/resetForm' }
   | { type: 'complaint/markSaved'; payload: { id: number; complaintNumber: string } }
   | { type: 'complaint/loadSavedComplaintForEditing'; payload: SavedComplaintRecord };
@@ -49,6 +63,7 @@ export const setLockedContext = (payload: {
   locked: LockedBatchContext;
   defaultSource?: string;
   defaultCustomerName?: string;
+  defaultStrengthGrade?: string;
 }): ComplaintAction => ({
   type: 'complaint/setLockedContext',
   payload,
@@ -105,8 +120,10 @@ export function complaintReducer(
           }
         }
       });
-      // Always enforce locked fields from batch context
-      Object.assign(nextForm, state.lockedContext);
+      // When editing a new draft, enforce locked fields from the bound batch context
+      if (!state.activeSavedDbId) {
+        Object.assign(nextForm, state.lockedContext);
+      }
       return {
         ...state,
         form: nextForm,
@@ -115,15 +132,20 @@ export function complaintReducer(
     }
 
     case 'complaint/setLockedContext': {
-      const { locked, defaultSource, defaultCustomerName } = action.payload;
+      const { locked, defaultSource = '', defaultCustomerName = '', defaultStrengthGrade = '' } =
+        action.payload;
       return {
         ...state,
         lockedContext: { ...locked },
+        defaultSource,
+        defaultCustomerName,
+        defaultStrengthGrade,
         form: {
           ...state.form,
           ...locked,
-          complaintSource: state.form.complaintSource || defaultSource || '',
-          customerName: state.form.customerName || defaultCustomerName || '',
+          complaintSource: state.form.complaintSource || defaultSource,
+          customerName: state.form.customerName || defaultCustomerName,
+          strengthGrade: state.form.strengthGrade || defaultStrengthGrade,
         },
       };
     }
@@ -132,9 +154,15 @@ export function complaintReducer(
       return {
         ...initialComplaintState,
         lockedContext: { ...state.lockedContext },
+        defaultSource: state.defaultSource,
+        defaultCustomerName: state.defaultCustomerName,
+        defaultStrengthGrade: state.defaultStrengthGrade,
         form: {
           ...emptyComplaint,
           ...state.lockedContext,
+          complaintSource: state.defaultSource,
+          customerName: state.defaultCustomerName,
+          strengthGrade: state.defaultStrengthGrade,
         },
       };
     }
@@ -160,7 +188,6 @@ export function complaintReducer(
       };
       return {
         ...state,
-        lockedContext: lockedForRecord,
         form: {
           customerName: r.customerName || '',
           complaintSource: r.complaintSource || '',

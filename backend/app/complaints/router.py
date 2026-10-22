@@ -72,6 +72,16 @@ def _open_reports_for(db: Session, batch_id: str):
     )
 
 
+def batch_defaults(batch: Batch) -> dict[str, str]:
+    """Editable defaults derived from the batch's latest quality record."""
+    if batch.quality_records:
+        latest = batch.quality_records[0]
+        return {
+            "strengthGrade": f"Fat {latest.fat_percentage:g}%, SNF {latest.snf_percentage:g}%",
+        }
+    return {"strengthGrade": ""}
+
+
 @router.get("/complaints/context/{batch_id}")
 def get_batch_context(batch_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
     batch = _get_batch(db, batch_id)
@@ -79,6 +89,7 @@ def get_batch_context(batch_id: str, db: Session = Depends(get_db)) -> dict[str,
         "batchId": batch.id,
         "productType": batch.product_type,
         "locked": batch_context(batch),
+        "defaults": batch_defaults(batch),
         "otherReports": _open_reports_for(db, batch.id).count(),
     }
 
@@ -98,7 +109,7 @@ def _result_to_response(result: dict[str, Any]) -> dict[str, Any]:
 @router.post("/copilot/process", response_model=CopilotResponse, dependencies=[ai_limit])
 def process_copilot(request: CopilotRequest, db: Session = Depends(get_db)) -> dict[str, Any]:
     batch = _get_batch(db, request.batchId)
-    form = {**request.current_form.model_dump(), **batch_context(batch)}
+    form = {**batch_defaults(batch), **request.current_form.model_dump(), **batch_context(batch)}
     return _result_to_response(run_intake(request.text, form))
 
 
@@ -116,15 +127,23 @@ async def process_uploaded_document(
     if len(data) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="The file is larger than the 10 MB upload limit.")
     try:
-        ComplaintForm.model_validate_json(current_form)
+        parsed_form = ComplaintForm.model_validate_json(current_form)
     except ValidationError as error:
         raise HTTPException(status_code=422, detail="The existing complaint form is invalid.") from error
 
     text, truncated = extract_uploaded_document(file.filename, data)
-    result = run_intake(text, batch_context(batch))
+    seed_form = {
+        **batch_defaults(batch),
+        "customerName": parsed_form.customerName,
+        "complaintSource": parsed_form.complaintSource,
+        **batch_context(batch),
+    }
+    if parsed_form.strengthGrade:
+        seed_form["strengthGrade"] = parsed_form.strengthGrade
+    result = run_intake(text, seed_form)
     return {
         **_result_to_response(result),
-        "message": "Extracted complaint document details into the form.",
+        "message": result.get("summary") or "Extracted complaint document details into the form.",
         "sourceFile": file.filename,
         "extractedCharacters": len(text),
         "textTruncated": truncated,

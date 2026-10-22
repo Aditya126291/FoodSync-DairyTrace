@@ -156,9 +156,9 @@
   font-style: normal;
   font-size: 10px;
   font-weight: 700;
-  color: #4338ca;
-  background: #eef2ff;
-  border: 1px solid #c7d2fe;
+  color: #065f46;
+  background: #ecfdf5;
+  border: 1px solid #6ee7b7;
   padding: 1px 6px;
   border-radius: 999px;
 }
@@ -200,9 +200,9 @@
 .dt-field input.ai-updated,
 .dt-field select.ai-updated,
 .dt-field textarea.ai-updated {
-  border-color: #6366f1;
-  background: #f5f7ff;
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+  border-color: #10b981;
+  background: #ecfdf5;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.14);
 }
 
 .dt-field textarea {

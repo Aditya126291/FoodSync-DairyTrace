@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from './store';
 import { applyPatch, resetForm } from './complaintSlice';
 import { processComplaint, uploadComplaint, type AiResponse } from './api';
@@ -13,11 +13,18 @@ export function Copilot({ batchId }: CopilotProps) {
   const [draft, setDraft] = useState('');
   const [dragging, setDragging] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const chatLogRef = useRef<HTMLDivElement>(null);
 
   const { messages, processing, risk, rootCause, capaRecommendations, engine, missingFields } =
     useAppSelector((s) => s.copilot);
   const form = useAppSelector((s) => s.complaint.form);
   const status = useAppSelector((s) => s.complaint.status);
+
+  useEffect(() => {
+    if (chatLogRef.current) {
+      chatLogRef.current.scrollTop = chatLogRef.current.scrollHeight;
+    }
+  }, [messages.length, processing]);
 
   const hasFormContent = Boolean(
     form.productName ||
@@ -230,7 +237,7 @@ export function Copilot({ batchId }: CopilotProps) {
         <small>PDF, DOCX, TXT, EML · Max file size: 10 MB</small>
       </div>
 
-      <div className="dt-chat-log">
+      <div className="dt-chat-log" ref={chatLogRef}>
         {messages.map((message) => (
           <div className={`dt-message ${message.role}`} key={message.id}>
             {message.text}

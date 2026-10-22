@@ -58,6 +58,7 @@ function ComplaintWorkspaceInner({
             locked: ctx.locked,
             defaultSource,
             defaultCustomerName: mode === 'staff' && user?.full_name ? user.full_name : '',
+            defaultStrengthGrade: ctx.defaults?.strengthGrade || '',
           })
         );
       })

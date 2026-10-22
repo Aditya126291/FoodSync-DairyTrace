@@ -77,7 +77,7 @@ export default function LineageGraph({
     };
   }, [activeFocus, links, distributions]);
 
-  // Keep the journey readable by showing only the selected batch's connected path.
+  // In compact mode, show only the selected batch's connected path; in full mode, show the complete plant genealogy with the active path highlighted.
   const visibleBatchIds = useMemo(
     () => new Set([
       activeFocus,
@@ -88,16 +88,19 @@ export default function LineageGraph({
     [activeFocus, relatedElements]
   );
   const visibleMilkBatches = useMemo(
-    () => rawMilkBatches.filter((batch) => visibleBatchIds.has(batch.id)),
-    [rawMilkBatches, visibleBatchIds]
+    () => (compact ? rawMilkBatches.filter((batch) => visibleBatchIds.has(batch.id)) : rawMilkBatches),
+    [compact, rawMilkBatches, visibleBatchIds]
   );
   const visiblePaneerBatches = useMemo(
-    () => finishedPaneerBatches.filter((batch) => visibleBatchIds.has(batch.id)),
-    [finishedPaneerBatches, visibleBatchIds]
+    () => (compact ? finishedPaneerBatches.filter((batch) => visibleBatchIds.has(batch.id)) : finishedPaneerBatches),
+    [compact, finishedPaneerBatches, visibleBatchIds]
   );
   const visibleDistributions = useMemo(
-    () => distributions.filter((record) => relatedElements.retailers.some((retailer) => retailer.id === record.id)),
-    [distributions, relatedElements]
+    () =>
+      compact
+        ? distributions.filter((record) => relatedElements.retailers.some((retailer) => retailer.id === record.id))
+        : distributions,
+    [compact, distributions, relatedElements]
   );
 
   const getStatusBadge = (status) => {

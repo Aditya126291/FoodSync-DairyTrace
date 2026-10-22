@@ -2,7 +2,7 @@ import React, { useEffect, useState, type ChangeEvent } from 'react';
 import { useAppDispatch, useAppSelector } from './store';
 import { markSaved, resetForm, updateField } from './complaintSlice';
 import { commitComplaintToDb, fetchSavedComplaints, updateSavedComplaintInDb } from './api';
-import { addMessage } from './copilotSlice';
+import { addMessage, resetChat } from './copilotSlice';
 import { LOCKED_FIELD_KEYS, type ComplaintForm as ComplaintFormType, type LockedBatchContext } from './types';
 import { SavedComplaintsModal } from './SavedComplaintsModal';
 
@@ -130,6 +130,12 @@ export function ComplaintForm({
   }, [isStaff]);
 
   const handleSaveOrUpdate = async () => {
+    if (activeSavedDbId && !isStaff) {
+      dispatch(resetForm());
+      dispatch(resetChat());
+      return;
+    }
+
     const narrative = `${form.defectSummary} ${form.detailedDescription}`.trim();
     if (narrative.length < 5) {
       dispatch(
@@ -458,6 +464,8 @@ export function ComplaintForm({
             ? 'Saving to QMS…'
             : activeSavedDbId && isStaff
             ? '✓ Update saved record'
+            : activeSavedDbId && !isStaff
+            ? '🔄 File another complaint'
             : '▣ Save complaint'}
         </button>
       </div>

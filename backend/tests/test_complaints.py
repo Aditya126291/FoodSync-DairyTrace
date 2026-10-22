@@ -86,6 +86,7 @@ def test_context_locks_batch_fields_and_unknown_batch_404():
         c.reseed()
         ctx = c.get("/api/complaints/context/pan-201").json()
         assert ctx["locked"]["batchLotNumber"] == "PAN-201" and ctx["locked"]["productName"] == "Fresh Malai Paneer"
+        assert "Fat" in ctx["defaults"]["strengthGrade"] and "SNF" in ctx["defaults"]["strengthGrade"]
         assert c.get("/api/complaints/context/NOPE-1").status_code == 404
 
 
@@ -105,10 +106,12 @@ def test_upload_txt_eml_docx_pdf_and_rejections():
         c.reseed()
         body = "Complaint Type: Packaging / tamper\nAffected Quantity: 12 packs\nDefect Summary: Pouches arrived leaking at the store"
 
-        def up(name, data, mime="application/octet-stream"):
-            return c.post("/api/copilot/upload", data={"batchId": "PAN-201", "current_form": "{}"}, files={"file": (name, data, mime)})
+        def up(name, data, mime="application/octet-stream", current_form="{}"):
+            return c.post("/api/copilot/upload", data={"batchId": "PAN-201", "current_form": current_form}, files={"file": (name, data, mime)})
 
-        assert up("a.txt", body.encode()).json()["patch"]["affectedQuantity"] == "12 packs"
+        txt_res = up("a.txt", body.encode(), current_form='{"customerName": "Asha Rao", "complaintSource": "Consumer"}').json()
+        assert txt_res["patch"]["affectedQuantity"] == "12 packs"
+        assert "Reporter name" not in txt_res["missingFields"]
         eml = f"From: a@b.c\nTo: q@d.t\nSubject: complaint\nContent-Type: text/plain\n\n{body}\n".encode()
         assert up("a.eml", eml).status_code == 200
         buf = io.BytesIO(); d = Document()

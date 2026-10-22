@@ -21,6 +21,9 @@ export interface BatchComplaintContext {
   batchId: string;
   productType: string;
   locked: LockedBatchContext;
+  defaults?: {
+    strengthGrade?: string;
+  };
   otherReports: number;
 }
 

@@ -4,7 +4,6 @@ Adheres to Food Safety and Standards (Food Recall Procedure) Regulations, 2017 â
 """
 
 import html
-import json
 from datetime import datetime, timezone
 from typing import Any, Optional
 from sqlalchemy.orm import Session
@@ -35,17 +34,8 @@ def generate_fssai_dossier_json(
     event_id = recall_event.id or 1
     ref_number = f"FSSAI/FOSCOS/REC/{year_str}/{event_id:04d}"
 
-    try:
-        affected_batches: list[str] = json.loads(recall_event.affected_batches_json or "[]")
-    except (json.JSONDecodeError, TypeError):
-        affected_batches = []
-
-    try:
-        affected_destinations: list[dict[str, Any]] = json.loads(
-            recall_event.affected_destinations_json or "[]"
-        )
-    except (json.JSONDecodeError, TypeError):
-        affected_destinations = []
+    affected_batches: list[str] = recall_event.affected_batches_json if isinstance(recall_event.affected_batches_json, list) else []
+    affected_destinations: list[dict[str, Any]] = recall_event.affected_destinations_json if isinstance(recall_event.affected_destinations_json, list) else []
 
     root_batch_info: dict[str, Any] = {"id": recall_event.root_batch_id}
     affected_batch_records: list[dict[str, Any]] = []

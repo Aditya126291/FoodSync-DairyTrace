@@ -7,35 +7,51 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['"Plus Jakarta Sans"', 'system-ui', '-apple-system', 'sans-serif'],
+        sans: ['"Plus Jakarta Sans"', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
         display: ['"Fraunces"', 'Georgia', 'serif'],
+        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
       },
       colors: {
-        cream: {
-          50: '#FFFDF9',
-          100: '#FAF7F2',
-          200: '#F3EDE2',
-          300: '#E6DEC8',
+        // Page background and soft surfaces.
+        canvas: '#F5F8F6',
+        // Brand green: primary actions, links, positive accents.
+        brand: {
+          50: '#F0F9F4',
+          100: '#DCF1E5',
+          200: '#BBE3CD',
+          300: '#8CCDAD',
+          400: '#55B087',
+          500: '#2F9467',
+          600: '#1E7852',
+          700: '#185F43',
+          800: '#144C37',
+          900: '#103D2D',
+          950: '#08241B',
         },
-        pasture: {
-          50: '#F0FDF4',
-          100: '#DCFCE7',
-          500: '#22C55E',
-          600: '#16A34A',
-          700: '#15803D',
-          800: '#166534',
-          900: '#14532D',
+        // Warm neutral scale for text, borders and surfaces.
+        ink: {
+          50: '#F8FAF8',
+          100: '#EEF2EF',
+          200: '#DFE6E1',
+          300: '#C8D2CB',
+          400: '#9BA99F',
+          500: '#728077',
+          600: '#56635A',
+          700: '#3F4A43',
+          800: '#29332D',
+          900: '#17211B',
         },
-        dairy: {
-          50: '#f0f9ff',
-          100: '#e0f2fe',
-          200: '#bae6fd',
-          500: '#0284c7',
-          600: '#0369a1',
-          700: '#075985',
-          800: '#0c4a6e',
-          900: '#082f49',
-        },
+      },
+      borderRadius: {
+        card: '1rem',
+        control: '0.75rem',
+      },
+      boxShadow: {
+        card: '0 1px 2px rgba(27, 26, 23, 0.04), 0 6px 20px -8px rgba(27, 26, 23, 0.08)',
+        pop: '0 12px 40px -12px rgba(27, 26, 23, 0.25)',
+      },
+      maxWidth: {
+        prose: '65ch',
       },
     },
   },

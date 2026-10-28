@@ -3,11 +3,11 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
-  ChevronDown,
   ClipboardCheck,
   FileText,
   Fingerprint,
   FlaskConical,
+  GitBranch,
   Lock,
   MessageSquareWarning,
   Milk,
@@ -20,42 +20,24 @@ import {
   Store,
   Thermometer,
   Trash2,
-  TriangleAlert,
 } from 'lucide-react';
 import SecurityInspectionForm from '../components/SecurityInspectionForm';
 import LineageGraph from '../components/LineageGraph';
 import { api } from '../api';
 import { useAuth } from '../auth/AuthContext';
-
-const statusNames = { ACTIVE: 'Active', QUARANTINED: 'On hold', RECALLED: 'Recalled' };
-const prettyDate = (value) =>
-  value
-    ? new Date(value).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
-    : 'Not recorded';
-
-function Section({ title, subtitle, count, action, children, defaultOpen = false }) {
-  return (
-    <details
-      open={defaultOpen}
-      className="group overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm"
-    >
-      <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 sm:px-5 [&::-webkit-details-marker]:hidden">
-        <span>
-          <span className="block text-sm font-bold text-stone-900">{title}</span>
-          {subtitle && <span className="mt-1 block text-xs text-stone-500">{subtitle}</span>}
-        </span>
-        <span className="flex items-center gap-2.5">
-          {action}
-          <span className="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-600">
-            {count}
-          </span>
-          <ChevronDown className="h-4 w-4 text-stone-500 transition group-open:rotate-180" />
-        </span>
-      </summary>
-      <div className="border-t border-stone-100 p-4 sm:p-5">{children}</div>
-    </details>
-  );
-}
+import {
+  Alert,
+  Badge,
+  EmptyState,
+  PageHeader,
+  SectionCard,
+  Spinner,
+  StatTile,
+  StatusBadge,
+  TabPanel,
+  Tabs,
+} from '../components/ui';
+import { formatDate, formatDateTime, formatQuantity, humanize, unitFor } from '../utils/format';
 
 function ComplaintInbox({
   complaints,
@@ -76,194 +58,174 @@ function ComplaintInbox({
   ).length;
 
   return (
-    <Section
-      title="QMS Complaint & Safety Inbox"
-      subtitle="Consumer and staff reports filed from scanned batch passports and the AI Complaint Copilot"
-      count={`${complaints.length} ${complaints.length === 1 ? 'report' : 'reports'}`}
-      defaultOpen={ true }
-    >
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-stone-500">
-          {urgentCount
-            ? `${urgentCount} high/critical report${urgentCount === 1 ? '' : 's'} awaiting safety review.`
-            : 'All submitted complaints and forensic lab extractions appear here.'}
-        </p>
+    <SectionCard
+      title="QMS Complaint &amp; Safety Inbox"
+      description="Consumer and staff incident reports filed from scanned batch passports and the AI Complaint Copilot."
+      count={complaints.length}
+      actions={
         <button
           type="button"
           onClick={onRefresh}
           disabled={loading}
-          className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-stone-300 px-3 text-xs font-bold text-stone-700 hover:bg-stone-50 disabled:opacity-60"
+          className="btn btn-secondary btn-sm"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-          Refresh inbox
+          Refresh
         </button>
-      </div>
-
+      }
+    >
       {error && (
-        <p role="alert" className="mb-3 rounded-xl bg-rose-50 p-3 text-sm text-rose-800">
-          {error}
-        </p>
+        <div className="mb-4">
+          <Alert tone="danger">{error}</Alert>
+        </div>
+      )}
+
+      {urgentCount > 0 && (
+        <div className="mb-4">
+          <Alert tone="warn">
+            {urgentCount} critical/high severity {urgentCount === 1 ? 'report' : 'reports'} awaiting QA triage and root-cause verification.
+          </Alert>
+        </div>
       )}
 
       {loading && complaints.length === 0 ? (
-        <p className="rounded-xl bg-stone-50 p-4 text-sm text-stone-500">
-          Loading complaint reports…
-        </p>
+        <Spinner label="Loading complaint reports…" />
       ) : complaints.length ? (
         <div className="space-y-3">
           {complaints.map((item) => {
             const batchId = item.batchId || item.batchLotNumber;
             const sev = item.severity || 'Medium';
             const safetyFlag = ['Critical', 'High'].includes(sev);
-            const severityTone =
-              sev === 'Critical'
-                ? 'border-rose-200 bg-rose-50 text-rose-800'
-                : sev === 'High'
-                ? 'border-amber-200 bg-amber-50 text-amber-800'
-                : 'border-stone-200 bg-stone-50 text-stone-700';
 
             return (
               <article
                 key={item.id}
-                className={`rounded-2xl border p-4 ${
-                  safetyFlag ? 'border-amber-200 bg-amber-50/20' : 'border-stone-200 bg-white'
+                className={`card p-4 transition ${
+                  safetyFlag ? 'border-amber-200 bg-amber-50/20' : ''
                 }`}
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-sm font-bold text-stone-900">
-                        {item.complaintNumber}{' '}
-                        <span className="font-medium text-stone-500">· Batch {batchId}</span>
+                      <h3 className="text-sm font-bold text-ink-900">
+                        {item.complaintNumber}
+                        <span className="font-normal text-ink-500"> · Batch {batchId}</span>
                       </h3>
-                      <span
-                        className={`rounded-full border px-2 py-0.5 text-[10px] font-extrabold uppercase ${severityTone}`}
-                      >
+                      <Badge tone={sev === 'Critical' ? 'danger' : sev === 'High' ? 'warn' : 'neutral'}>
                         {sev}
-                      </span>
+                      </Badge>
                       {safetyFlag && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-800">
-                          <MessageSquareWarning className="h-3 w-3" />
-                          Safety review
-                        </span>
+                        <Badge tone="danger" icon={MessageSquareWarning}>
+                          Safety Review
+                        </Badge>
                       )}
                     </div>
-                    <p className="mt-1 text-xs text-stone-500">
-                      {item.complaintType || 'Quality Deviation'} ·{' '}
-                      {item.customerName || 'Anonymous'} ({item.complaintSource || 'Consumer'}) ·{' '}
-                      {item.complaintDate || prettyDate(item.createdAt)}
+                    <p className="mt-1 text-xs text-ink-500">
+                      Filed on {formatDate(item.createdAt || item.dateReported)} · Source: {item.source || 'Consumer'}
+                      {item.customerName ? ` (${item.customerName})` : ''}
                     </p>
                   </div>
-                  <span className="rounded-full border border-stone-200 bg-white px-2.5 py-1 text-[10px] font-bold uppercase text-stone-700">
-                    {item.status}
-                  </span>
+
+                  <span className="badge badge-neutral text-xs">{item.status || 'Under review'}</span>
                 </div>
 
-                <p className="mt-2.5 text-sm font-semibold text-stone-800">
-                  {item.defectSummary || item.detailedDescription}
+                <p className="mt-3 text-sm leading-relaxed text-ink-700 line-clamp-2">
+                  {item.defectSummary || item.description || item.detailedDescription || 'No complaint details entered.'}
                 </p>
-                {item.detailedDescription &&
-                  item.detailedDescription !== item.defectSummary && (
-                    <p className="mt-1 text-xs leading-5 text-stone-600">
-                      {item.detailedDescription}
-                    </p>
-                  )}
 
-                {(item.riskAssessment || item.rootCause) && (
-                  <div className="mt-2.5 rounded-xl bg-stone-50 p-2.5 text-xs text-stone-700 space-y-1 border border-stone-200/70">
-                    {item.riskAssessment && (
-                      <p>
-                        <strong>Risk Assessment:</strong> {item.riskAssessment}
-                      </p>
-                    )}
-                    {item.rootCause && (
-                      <p>
-                        <strong>Root Cause Hypothesis:</strong> {item.rootCause}
-                      </p>
-                    )}
-                  </div>
+                {(item.riskAssessment || item.rootCause || item.analysisSummary || item.detailedDescription) && (
+                  <details className="mt-3 rounded-control border border-ink-200 bg-ink-50/70 px-3 py-2">
+                    <summary className="cursor-pointer text-xs font-semibold text-brand-800">View incident details and assessment</summary>
+                    <div className="space-y-2 pt-2 text-xs leading-relaxed text-ink-700">
+                      {item.detailedDescription && <p>{item.detailedDescription}</p>}
+                      {(item.riskAssessment || item.rootCause || item.analysisSummary) && (
+                        <p className="rounded-control bg-brand-50 p-2 text-brand-950">
+                          <span className="font-bold">Assessment: </span>
+                          {item.riskAssessment || item.rootCause || item.analysisSummary}
+                        </p>
+                      )}
+                    </div>
+                  </details>
                 )}
 
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  {batchId && (
-                    <button
-                      type="button"
-                      onClick={() => onSelectBatch(batchId)}
-                      className="min-h-9 rounded-lg border border-stone-300 bg-white px-3 text-xs font-bold text-stone-700 hover:bg-stone-50"
-                    >
-                      Open batch {batchId} audit
-                    </button>
-                  )}
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-ink-100 pt-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {onSelectBatch && (
+                      <button
+                        type="button"
+                        onClick={() => onSelectBatch(batchId)}
+                        className="btn btn-secondary btn-sm"
+                      >
+                        Audit Batch {batchId}
+                      </button>
+                    )}
 
-                  {item.status === 'Committed' && (
-                    <button
-                      type="button"
+                    {isQA && onSafetyAction && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onSafetyAction(
+                            batchId,
+                            `Complaint ${item.complaintNumber}: ${
+                              item.defectSummary || item.detailedDescription || item.description || 'Quality non-compliance'
+                            }`
+                          )
+                        }
+                        className="btn btn-danger-soft btn-sm"
+                      >
+                        <ShieldAlert className="h-3.5 w-3.5 text-red-600" />
+                        Recall Batch
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={item.status || 'Under review'}
                       disabled={busyId === item.id}
-                      onClick={() => onUpdateStatus(item, 'Under review')}
-                      className="min-h-9 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-xs font-bold text-emerald-900 hover:bg-emerald-100 disabled:opacity-60"
+                      onChange={(e) => onUpdateStatus?.(item, e.target.value)}
+                      className="field min-h-[34px] py-1 text-xs"
+                      aria-label="Change complaint status"
                     >
-                      {busyId === item.id ? 'Updating…' : 'Mark Under review'}
-                    </button>
-                  )}
+                      <option value="Under review">Under review</option>
+                      <option value="Investigation opened">Investigation opened</option>
+                      <option value="Recall triggered">Recall triggered</option>
+                      <option value="Resolved">Resolved</option>
+                    </select>
 
-                  {item.status !== 'Resolved' && (
-                    <button
-                      type="button"
-                      disabled={busyId === item.id}
-                      onClick={() => onUpdateStatus(item, 'Resolved')}
-                      className="min-h-9 rounded-lg border border-stone-200 bg-stone-100 px-3 text-xs font-bold text-stone-700 hover:bg-stone-200 disabled:opacity-60"
-                    >
-                      Mark Resolved
-                    </button>
-                  )}
-
-                  {safetyFlag && item.status !== 'Recall triggered' && batchId && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onSafetyAction(
-                          batchId,
-                          item.defectSummary || item.detailedDescription || 'Complaint safety alert'
-                        )
-                      }
-                      className="min-h-9 rounded-lg bg-rose-800 px-3 text-xs font-bold text-white hover:bg-rose-900"
-                    >
-                      {isQA ? 'Simulate / Run Recall' : 'Simulate Blast Radius'}
-                    </button>
-                  )}
-
-                  {isQA && (
-                    <button
-                      type="button"
-                      disabled={busyId === item.id}
-                      onClick={() => onDeleteComplaint(item)}
-                      className="ml-auto inline-flex min-h-9 items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 text-xs font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-60"
-                      title="Delete complaint record (QA Officer only)"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Delete
-                    </button>
-                  )}
+                    {isQA && onDeleteComplaint && (
+                      <button
+                        type="button"
+                        disabled={busyId === item.id}
+                        onClick={() => onDeleteComplaint(item)}
+                        className="btn btn-ghost btn-sm text-red-700"
+                        title="Delete complaint"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </article>
             );
           })}
         </div>
       ) : (
-        !error && (
-          <p className="rounded-xl bg-stone-50 p-4 text-sm text-stone-600">
-            No complaint reports are recorded for this view yet.
-          </p>
-        )
+        <EmptyState
+          icon={ClipboardCheck}
+          title="No incident complaints recorded"
+        >
+          No customer or plant incidents are registered for this view.
+        </EmptyState>
       )}
-    </Section>
+    </SectionCard>
   );
 }
 
 export default function InspectorHub({
-  batches,
-  links,
-  distributions,
+  batches = [],
+  links = [],
+  distributions = [],
   initialBatchId,
   auditRefreshVersion = 0,
   onSelectBatch,
@@ -282,9 +244,16 @@ export default function InspectorHub({
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState('');
   const [selectedBatch, setSelectedBatch] = useState(null);
+
+  // Tabs: when batch selected: 'journey' | 'quality' | 'deliveries' | 'inspections' | 'complaints' | 'recalls'
+  const [batchTab, setBatchTab] = useState('journey');
+  // Tabs: when no batch selected: 'overview' | 'complaints' | 'activity'
+  const [dashboardTab, setDashboardTab] = useState('overview');
+
   const [formOpen, setFormOpen] = useState(false);
   const [qualityFormOpen, setQualityFormOpen] = useState(false);
   const [dispatchFormOpen, setDispatchFormOpen] = useState(false);
+
   const [quality, setQuality] = useState([]);
   const [inspections, setInspections] = useState([]);
   const [recalls, setRecalls] = useState([]);
@@ -299,7 +268,7 @@ export default function InspectorHub({
 
   // Inline QA Quality Record form state
   const [newQuality, setNewQuality] = useState({
-    lab_name: 'FoodSync Central QA Lab, Pune',
+    lab_name: 'DairyTrace Central QA Lab, Pune',
     fat_percentage: 4.6,
     snf_percentage: 8.7,
     acidity: 0.14,
@@ -343,7 +312,7 @@ export default function InspectorHub({
       );
       setQuality(qualityRecords || []);
     } catch (error) {
-      setHistoryError(error.message || 'Could not load inspection history.');
+      setHistoryError(error.message || 'Could not load batch history.');
       setInspections([]);
       setRecalls([]);
       setQuality([]);
@@ -358,9 +327,7 @@ export default function InspectorHub({
     try {
       setGlobalComplaints((await api.getComplaints()) || []);
     } catch (error) {
-      setComplaintError(
-        error.message || 'Complaint reports could not be loaded. Check your connection and retry.'
-      );
+      setComplaintError(error.message || 'Complaint reports could not be loaded.');
     } finally {
       setComplaintLoading(false);
     }
@@ -372,7 +339,7 @@ export default function InspectorHub({
     try {
       await api.updateComplaintStatus(complaint.id, status);
       await loadComplaints();
-      onNotify(`Complaint ${complaint.complaintNumber} marked "${status}".`);
+      onNotify?.(`Complaint ${complaint.complaintNumber} marked "${status}".`);
     } catch (error) {
       setComplaintError(error.message || 'Could not update this complaint.');
     } finally {
@@ -387,7 +354,7 @@ export default function InspectorHub({
     try {
       await api.deleteComplaint(complaint.id);
       await loadComplaints();
-      onNotify(`Complaint ${complaint.complaintNumber} deleted.`);
+      onNotify?.(`Complaint ${complaint.complaintNumber} deleted.`);
     } catch (error) {
       setComplaintError(error.message || 'Could not delete this complaint.');
     } finally {
@@ -424,7 +391,7 @@ export default function InspectorHub({
         setGlobalRecalls(recallEvents || []);
       })
       .catch(() =>
-        setHistoryError('Recent audit activity could not be loaded. Check your connection.')
+        setHistoryError('Recent audit activity could not be loaded.')
       );
   }, [auditRefreshVersion]);
 
@@ -432,6 +399,7 @@ export default function InspectorHub({
     loadComplaints();
   }, [auditRefreshVersion]);
 
+  // Debounced search
   useEffect(() => {
     const search = query.trim();
     if (search.length < 2) {
@@ -447,16 +415,17 @@ export default function InspectorHub({
         const found = await api.lookupBatches(search);
         if (active) {
           setMatches(found || []);
-          if (!found?.length)
-            setSearchError('No batches match that ID, SKU, or serial number.');
+          if (!found?.length) {
+            setSearchError('No batches match that code or serial number.');
+          }
         }
       } catch (error) {
-        if (active)
-          setSearchError(error.message || 'Search failed. Check your connection and retry.');
+        if (active) setSearchError(error.message || 'Search failed.');
       } finally {
         if (active) setSearching(false);
       }
     }, 250);
+
     return () => {
       active = false;
       clearTimeout(timer);
@@ -477,7 +446,7 @@ export default function InspectorHub({
     setFormOpen(false);
     setQualityFormOpen(false);
     setDispatchFormOpen(false);
-    onSelectBatch(id);
+    onSelectBatch?.(id);
   };
 
   const handleAddQualityRecord = async (e) => {
@@ -496,9 +465,9 @@ export default function InspectorHub({
       });
       setQualityFormOpen(false);
       await loadHistory(selectedBatch.id);
-      onNotify(`Quality record attached to ${selectedBatch.id}.`);
+      onNotify?.(`Quality test certificate attached to ${selectedBatch.id}.`);
     } catch (err) {
-      onNotify(err.message || 'Could not add quality record.', 'error');
+      onNotify?.(err.message || 'Could not add quality record.', 'error');
     }
   };
 
@@ -517,25 +486,11 @@ export default function InspectorHub({
       setDispatchFormOpen(false);
       setNewDispatch((prev) => ({ ...prev, destination_name: '' }));
       await onRefreshBatches?.();
-      onNotify(`Dispatch record added for ${selectedBatch.id}.`);
+      onNotify?.(`Store delivery record created for ${selectedBatch.id}.`);
     } catch (err) {
-      onNotify(err.message || 'Could not add dispatch record.', 'error');
+      onNotify?.(err.message || 'Could not add dispatch record.', 'error');
     }
   };
-
-  const relevantRecallIds = useMemo(() => recalls.map((event) => event.id), [recalls]);
-  const safetyTone =
-    selectedBatch?.status === 'RECALLED'
-      ? 'rose'
-      : selectedBatch?.status === 'QUARANTINED'
-      ? 'amber'
-      : 'emerald';
-  const safetyStyle =
-    safetyTone === 'rose'
-      ? { border: 'border-rose-200', bg: 'bg-rose-50', text: 'text-rose-800' }
-      : safetyTone === 'amber'
-      ? { border: 'border-amber-200', bg: 'bg-amber-50', text: 'text-amber-800' }
-      : { border: 'border-emerald-200', bg: 'bg-emerald-50', text: 'text-emerald-800' };
 
   const relatedDeliveries = useMemo(() => {
     if (!selectedBatch) return [];
@@ -548,63 +503,85 @@ export default function InspectorHub({
     return distributions.filter((item) => connectedIds.has(item.batch_id));
   }, [selectedBatch, links, distributions]);
 
-  const SafetyIcon =
-    safetyTone === 'rose'
-      ? ShieldAlert
-      : safetyTone === 'amber'
-      ? TriangleAlert
-      : ShieldCheck;
-
   const visibleComplaints = selectedBatch
     ? globalComplaints.filter(
-        (complaint) =>
-          (complaint.batchId || complaint.batchLotNumber) === selectedBatch.id
+        (complaint) => (complaint.batchId || complaint.batchLotNumber) === selectedBatch.id
       )
     : globalComplaints;
 
+  const urgentComplaintsCount = visibleComplaints.filter((c) =>
+    ['Critical', 'High'].includes(c.severity)
+  ).length;
+
+  // Batch-level tabs configuration
+  const batchTabs = [
+    { id: 'journey', label: 'Supply Chain Journey', icon: GitBranch },
+    { id: 'inspections', label: 'Physical Audits', icon: ClipboardCheck, count: inspections.length },
+    { id: 'quality', label: 'Lab Tests & Certificates', icon: FlaskConical, count: quality.length },
+    { id: 'deliveries', label: 'Retail Deliveries', icon: Store, count: relatedDeliveries.length },
+    {
+      id: 'complaints',
+      label: 'QMS Complaints',
+      icon: MessageSquareWarning,
+      count: visibleComplaints.length,
+      alert: urgentComplaintsCount > 0,
+    },
+    { id: 'recalls', label: 'Recall History', icon: ShieldAlert, count: recalls.length },
+  ];
+
+  // Dashboard-level tabs configuration
+  const dashboardTabs = [
+    { id: 'overview', label: 'Plant Lineage & Batches', icon: GitBranch },
+    {
+      id: 'complaints',
+      label: 'Global Complaint Inbox',
+      icon: MessageSquareWarning,
+      count: globalComplaints.length,
+      alert: globalComplaints.some((c) => ['Critical', 'High'].includes(c.severity)),
+    },
+    {
+      id: 'activity',
+      label: 'Recent Audit & Regulatory Activity',
+      icon: ShieldCheck,
+      count: globalInspections.length + globalRecalls.length,
+    },
+  ];
+
   return (
-    <div className="min-h-screen bg-[#faf8f2] text-stone-800">
-      <main className="mx-auto max-w-7xl space-y-7 px-4 py-7 sm:px-7 sm:py-9 lg:px-10">
-        {/* Staff Workspace Header Banner */}
-        <section className="flex flex-col justify-between gap-5 rounded-3xl border border-stone-200 bg-white p-5 shadow-sm sm:flex-row sm:items-end sm:p-7">
+    <div className="min-h-screen bg-canvas text-ink-800">
+      <main className="container-wide space-y-6 py-6 sm:py-8">
+        {/* Workspace Page Header */}
+        <div className="card card-pad flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-extrabold uppercase tracking-[.17em] text-emerald-800">
+              <span className="eyebrow">
                 {isQA ? 'QA Officer Workspace' : 'Field Inspector Workspace'}
               </span>
-              <span
-                className={`rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase ${
-                  isQA
-                    ? 'bg-amber-100 text-amber-900 border border-amber-200'
-                    : 'bg-emerald-100 text-emerald-900 border border-emerald-200'
-                }`}
-              >
-                {user?.role || 'STAFF'}
+              <span className="badge badge-safe">
+                {user?.full_name || 'Staff'} · {user?.role === 'QA_OFFICER' ? 'QA Officer' : 'Inspector'}
               </span>
             </div>
-            <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-stone-950">
-              {selectedBatch
-                ? `Batch Audit · ${selectedBatch.id}`
-                : 'DairyTrace Staff Dashboard & Audit Hub'}
+            <h1 className="page-title text-2xl sm:text-3xl mt-1">
+              {selectedBatch ? `Batch Audit · ${selectedBatch.id}` : 'Staff Traceability & Audit Console'}
             </h1>
-            <p className="mt-1.5 max-w-2xl text-sm leading-6 text-stone-600">
+            <p className="muted mt-1 max-w-3xl">
               {selectedBatch
-                ? `Inspecting milk-to-paneer genealogy, NABL lab records, retail deliveries, and QMS complaints for ${selectedBatch.id}.`
-                : 'Select or search any batch to audit its full genealogy, log tamper-evident inspections, review AI complaints, or simulate recalls.'}
+                ? `Verifying supply genealogy, tamper checks, lab purity tests, and store distributions for ${selectedBatch.id}.`
+                : 'Search or select any batch to audit physical integrity, trace milk-to-paneer genealogy, review customer complaints, or simulate recalls.'}
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
-            {selectedBatch && onClearBatch && (
+            {selectedBatch && (
               <button
                 type="button"
                 onClick={() => {
                   setSelectedBatch(null);
-                  onClearBatch();
+                  onClearBatch?.();
                 }}
-                className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-stone-300 bg-white px-4 text-xs font-bold text-stone-700 hover:bg-stone-50"
+                className="btn btn-secondary btn-sm"
               >
-                <ArrowLeft className="h-4 w-4" />
+                <ArrowLeft className="h-3.5 w-3.5" />
                 All Batches Overview
               </button>
             )}
@@ -613,551 +590,576 @@ export default function InspectorHub({
               <button
                 type="button"
                 onClick={onOpenCreateBatch}
-                className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-900 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-950"
+                className="btn btn-primary btn-sm"
               >
-                <Plus className="h-4 w-4" />
+                <Plus className="h-3.5 w-3.5" />
                 Add Batch / Link Milk
               </button>
             ) : (
-              <span
-                className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-3.5 text-xs font-semibold text-stone-600"
-                title="Creating batches and executing recalls require QA_OFFICER role"
-              >
-                <Lock className="h-3.5 w-3.5 text-stone-400" />
-                Inspector Read &amp; Audit Clearance
+              <span className="badge badge-neutral text-xs">
+                <Lock className="h-3 w-3 text-ink-500" />
+                Auditor Clearance (Read-Only)
               </span>
             )}
           </div>
-        </section>
+        </div>
 
-        {/* Search & Batch Lookup */}
-        <section className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm sm:p-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-900">
-                <Search className="h-5 w-5" />
-              </span>
-              <div>
-                <h2 className="text-base font-bold text-stone-900">
-                  Find or select any batch
-                </h2>
-                <p className="mt-0.5 text-xs sm:text-sm text-stone-600">
-                  Search by batch ID, SKU, or serial number, or pick a batch pill below to open its full audit.
-                </p>
-              </div>
+        {/* Search & Fast Batch Selector */}
+        <div className="card card-pad">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="section-title text-base font-bold">Search Batch Registry</h2>
+              <p className="muted text-xs">Enter a batch code, SKU, or serial number, or pick a batch chip below:</p>
             </div>
           </div>
 
-          <div className="relative mt-4">
+          <div className="relative mt-3">
             <input
               type="search"
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              className="min-h-12 w-full rounded-xl border border-stone-300 bg-[#faf9f5] pl-11 pr-4 text-sm outline-none focus:border-emerald-700 focus:bg-white focus:ring-2 focus:ring-emerald-700/10"
-              placeholder="Search by batch ID (e.g. MILK-101, PAN-201), SKU, or serial number…"
-              aria-label="Search batches by ID, SKU, or serial number"
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search batches (e.g. MILK-101, PAN-201)…"
+              className="field pl-10"
+              aria-label="Search batch registry"
             />
-            <Search className="absolute left-4 top-3.5 h-4 w-4 text-stone-400" />
+            <Search className="absolute left-3.5 top-3.5 h-4 w-4 text-ink-400" />
 
             {(matches.length > 0 || searching) && (
-              <div className="absolute z-20 mt-2 max-h-72 w-full overflow-y-auto rounded-2xl border border-stone-200 bg-white p-2 shadow-xl">
-                {searching && (
-                  <p className="px-3 py-2 text-sm text-stone-500">Searching batches…</p>
-                )}
-                {matches.map((batch) => (
+              <div className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-card border border-ink-200 bg-white p-2 shadow-pop">
+                {searching && <p className="p-3 text-xs text-ink-500">Searching batch registry…</p>}
+                {matches.map((b) => (
                   <button
-                    key={batch.id}
+                    key={b.id}
                     type="button"
-                    onClick={() => chooseBatch(batch)}
-                    className="flex min-h-14 w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left hover:bg-emerald-50"
+                    onClick={() => chooseBatch(b)}
+                    className="flex w-full items-center justify-between rounded-control p-2.5 text-left text-xs hover:bg-brand-50"
                   >
-                    <span>
-                      <strong className="block text-sm text-stone-900">
-                        {batch.id}{' '}
-                        <span className="font-normal text-stone-500">
-                          · {batch.product_type === 'MILK' ? 'Fresh milk' : 'Paneer'}
-                        </span>
-                      </strong>
-                      <span className="mt-0.5 block text-xs text-stone-500">
-                        {batch.facility_name}
-                        {batch.sku ? ` · SKU ${batch.sku}` : ''}
-                        {batch.serial_number ? ` · Serial ${batch.serial_number}` : ''}
-                      </span>
-                    </span>
-                    <ArrowRight className="h-4 w-4 shrink-0 text-emerald-800" />
+                    <div>
+                      <strong className="font-mono text-ink-900">{b.id}</strong>
+                      <span className="ml-2 text-ink-500">· {b.product_type === 'MILK' ? 'Raw Milk' : 'Paneer'}</span>
+                      <p className="text-[11px] text-ink-500">{b.facility_name}</p>
+                    </div>
+                    <ArrowRight className="h-3.5 w-3.5 text-brand-700" />
                   </button>
                 ))}
               </div>
             )}
           </div>
 
-          {searchError && !matches.length && query.trim().length >= 2 && (
-            <p role="status" className="mt-3 rounded-xl bg-stone-50 px-3 py-2 text-sm text-stone-600">
-              {searchError}
-            </p>
+          {searchError && query.trim().length >= 2 && !matches.length && (
+            <div className="mt-3">
+              <Alert tone="neutral">{searchError}</Alert>
+            </div>
           )}
 
-          {/* Quick Batch Registry Strip */}
+          {/* Quick Active Registry Strip */}
           {batches.length > 0 && (
-            <div className="mt-4 flex flex-wrap items-center gap-2 pt-3 border-t border-stone-100">
-              <span className="text-xs font-bold text-stone-500 mr-1">
-                Active Registry ({batches.length}):
-              </span>
-              {batches.map((b) => {
+            <div className="mt-4 border-t border-ink-100 pt-3">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs font-semibold text-ink-500">
+                  Recent batches <span className="font-normal">· {batches.length} total</span>
+                </span>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+              {batches.slice(0, 6).map((b) => {
                 const isSelected = selectedBatch?.id === b.id;
-                const badgeTone =
-                  b.status === 'RECALLED'
-                    ? 'border-rose-300 bg-rose-50 text-rose-800'
-                    : b.status === 'QUARANTINED'
-                    ? 'border-amber-300 bg-amber-50 text-amber-800'
-                    : 'border-stone-200 bg-[#faf9f5] text-stone-800';
                 return (
                   <button
                     key={b.id}
                     type="button"
                     onClick={() => chooseBatch(b)}
-                    className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold transition ${
+                    className={`badge transition ${
                       isSelected
-                        ? 'border-emerald-800 bg-emerald-900 text-white shadow-sm'
-                        : `${badgeTone} hover:border-emerald-600`
+                        ? 'border-brand-800 bg-brand-800 text-white font-bold'
+                        : b.status === 'RECALLED'
+                        ? 'badge-danger hover:border-red-400'
+                        : b.status === 'QUARANTINED'
+                        ? 'badge-warn hover:border-amber-400'
+                        : 'badge-neutral hover:border-brand-600'
                     }`}
                   >
                     {b.product_type === 'MILK' ? (
-                      <Milk className="h-3.5 w-3.5" />
+                      <Milk className="h-3 w-3" />
                     ) : (
-                      <Package className="h-3.5 w-3.5" />
+                      <Package className="h-3 w-3" />
                     )}
-                    <span>{b.id}</span>
-                    {b.status !== 'ACTIVE' && (
-                      <span className="rounded px-1 text-[9px] uppercase bg-black/10">
-                        {b.status}
-                      </span>
-                    )}
+                    <span className="font-mono">{b.id}</span>
                   </button>
                 );
               })}
+              {batches.length > 6 && (
+                <details id="all-batches-list" className="w-full pt-1">
+                  <summary className="cursor-pointer text-xs font-semibold text-brand-800">Show all {batches.length} batches</summary>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {batches.slice(6).map((b) => (
+                      <button key={b.id} type="button" onClick={() => chooseBatch(b)} className="badge badge-neutral transition hover:border-brand-600">
+                        {b.product_type === 'MILK' ? <Milk className="h-3 w-3" /> : <Package className="h-3 w-3" />}
+                        <span className="font-mono">{b.id}</span>
+                      </button>
+                    ))}
+                  </div>
+                </details>
+              )}
+              </div>
             </div>
           )}
-        </section>
+        </div>
 
+        {/* CONDITIONAL: Batch Selected View VS Root Dashboard View */}
         {selectedBatch ? (
-          <div className="space-y-5 panel-enter">
-            {/* Selected Batch Hero & Context Actions */}
-            <section
-              className={`rounded-3xl border ${safetyStyle.border} bg-white p-5 shadow-sm sm:p-7`}
-            >
-              <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
+          <div className="space-y-6">
+            {/* Selected Batch Summary Tile Header */}
+            <div className="card card-pad">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-stone-700">
+                    <span className="badge badge-neutral">
                       {selectedBatch.product_type === 'MILK' ? 'Fresh Raw Milk' : 'Malai Paneer'}
                     </span>
-                    <span
-                      className={`inline-flex items-center gap-1.5 rounded-full ${safetyStyle.bg} px-3 py-1 text-xs font-bold ${safetyStyle.text}`}
-                    >
-                      <SafetyIcon className="h-3.5 w-3.5" />
-                      {statusNames[selectedBatch.status] || selectedBatch.status}
-                    </span>
+                    <StatusBadge status={selectedBatch.status} />
                   </div>
-                  <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-stone-950">
+                  <h2 className="page-title text-2xl sm:text-3xl mt-2 font-mono font-bold text-ink-900">
                     {selectedBatch.id}
                   </h2>
-                  <p className="mt-1 text-sm text-stone-600">{selectedBatch.facility_name}</p>
+                  <p className="muted mt-1 text-sm">{selectedBatch.facility_name}</p>
                 </div>
 
-                {/* Bound Batch Context Actions */}
-                <div className="flex flex-wrap gap-2">
+                {/* Quick Action Buttons for This Batch */}
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
                     onClick={() => onOpenComplaintWorkspace?.(selectedBatch.id)}
-                    className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-stone-300 bg-white px-4 text-sm font-bold text-stone-800 hover:border-emerald-600 hover:bg-emerald-50 hover:text-emerald-950 transition"
+                    className="btn btn-secondary btn-sm"
                   >
-                    <FlaskConical className="h-4 w-4 text-emerald-800" />
-                    Log complaint / AI Copilot
+                    <FlaskConical className="h-3.5 w-3.5 text-brand-800" />
+                    Complaint / Copilot
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setFormOpen((v) => !v)}
-                    className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-900 px-4 text-sm font-bold text-white hover:bg-emerald-950"
+                    className="btn btn-primary btn-sm"
                   >
-                    <ClipboardCheck className="h-4 w-4" />
-                    Record security check
+                    <ClipboardCheck className="h-3.5 w-3.5" />
+                    Record Security Check
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => onViewPassport(selectedBatch.id)}
-                    className="min-h-11 rounded-xl border border-stone-300 px-4 text-sm font-bold text-stone-700 hover:bg-stone-50"
+                    onClick={() => onViewPassport?.(selectedBatch.id)}
+                    className="btn btn-secondary btn-sm"
                   >
-                    Public passport
+                    Public Passport
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => onOpenRecall(selectedBatch.id)}
-                    className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 text-sm font-bold text-rose-800 hover:bg-rose-100"
+                    onClick={() => onOpenRecall?.(selectedBatch.id)}
+                    className="btn btn-danger-soft btn-sm"
                   >
-                    <ShieldAlert className="h-4 w-4" />
-                    {isQA ? 'Simulate / Execute recall' : 'Simulate blast radius'}
+                    <ShieldAlert className="h-3.5 w-3.5 text-red-600" />
+                    {isQA ? 'Simulate / Recall' : 'Blast Radius'}
                   </button>
                 </div>
               </div>
 
-              <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="rounded-2xl bg-[#faf9f5] p-3.5">
-                  <span className="text-xs text-stone-500">Production date</span>
-                  <strong className="mt-1 block text-sm text-stone-900">
-                    {prettyDate(selectedBatch.production_date)}
-                  </strong>
-                </div>
-                <div className="rounded-2xl bg-[#faf9f5] p-3.5">
-                  <span className="text-xs text-stone-500">Expiry date</span>
-                  <strong className="mt-1 block text-sm text-stone-900">
-                    {prettyDate(selectedBatch.expiry_date)}
-                  </strong>
-                </div>
-                <div className="rounded-2xl bg-[#faf9f5] p-3.5">
-                  <span className="text-xs text-stone-500">Initial / Remaining Quantity</span>
-                  <strong className="mt-1 block text-sm text-stone-900">
-                    {Number(selectedBatch.initial_quantity || 0).toLocaleString()} /{' '}
-                    {Number(selectedBatch.remaining_quantity ?? selectedBatch.initial_quantity ?? 0).toLocaleString()}{' '}
-                    {selectedBatch.product_type === 'MILK' ? 'L' : 'kg'}
-                  </strong>
-                </div>
-                <div className="rounded-2xl bg-[#faf9f5] p-3.5">
-                  <span className="text-xs text-stone-500">Audit Access Level</span>
-                  <strong className="mt-1 block text-sm text-emerald-900">
-                    {isQA ? 'QA Officer (Full Write + Recall)' : 'Inspector (Audit + Inspection)'}
-                  </strong>
-                </div>
+              {/* Stat Tiles Grid */}
+              <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 border-t border-ink-100 pt-5">
+                <StatTile
+                  icon={Milk}
+                  label="Production Date"
+                  value={formatDate(selectedBatch.production_date)}
+                  hint={`Best before ${formatDate(selectedBatch.expiry_date)}`}
+                />
+                <StatTile
+                  icon={Package}
+                  label="Stock Volume"
+                  value={formatQuantity(selectedBatch.remaining_quantity ?? selectedBatch.initial_quantity, selectedBatch.product_type)}
+                  hint={`Initial: ${formatQuantity(selectedBatch.initial_quantity, selectedBatch.product_type)}`}
+                />
+                <StatTile
+                  icon={Store}
+                  label="Retail Distributions"
+                  value={`${relatedDeliveries.length} ${relatedDeliveries.length === 1 ? 'store' : 'stores'}`}
+                  hint="Downstream recipients"
+                />
+                <StatTile
+                  icon={ShieldCheck}
+                  label="Audited Safety Status"
+                  value={selectedBatch.status}
+                  tone={selectedBatch.status === 'RECALLED' ? 'danger' : selectedBatch.status === 'QUARANTINED' ? 'warn' : 'safe'}
+                />
               </div>
+            </div>
 
-              {(selectedBatch.sku || selectedBatch.serial_number) && (
-                <p className="mt-3 text-xs text-stone-500">
-                  {selectedBatch.sku && `SKU ${selectedBatch.sku}`}
-                  {selectedBatch.sku && selectedBatch.serial_number && ' · '}
-                  {selectedBatch.serial_number && `Serial ${selectedBatch.serial_number}`}
-                </p>
-              )}
-            </section>
-
+            {/* Security Inspection Form Modal / Inline Drawer */}
             {formOpen && (
-              <SecurityInspectionForm
-                key={selectedBatch.id}
-                batch={selectedBatch}
-                onCancel={() => setFormOpen(false)}
-                onSubmitted={async () => {
-                  setFormOpen(false);
-                  await Promise.all([
-                    loadHistory(selectedBatch.id),
-                    api
-                      .getInspections()
-                      .then((checks) => setGlobalInspections(checks || []))
-                      .catch(() => {}),
-                    onRefreshBatches?.(),
-                  ]);
-                  onNotify('Security check saved to the batch audit history.');
-                }}
-              />
+              <div className="card card-pad border-brand-300 ring-2 ring-brand-600/10">
+                <SecurityInspectionForm
+                  key={selectedBatch.id}
+                  batch={selectedBatch}
+                  onCancel={() => setFormOpen(false)}
+                  onSubmitted={async () => {
+                    setFormOpen(false);
+                    await Promise.all([
+                      loadHistory(selectedBatch.id),
+                      api.getInspections().then((checks) => setGlobalInspections(checks || [])),
+                      onRefreshBatches?.(),
+                    ]);
+                    onNotify?.('Security check recorded and signed into batch audit log.');
+                  }}
+                />
+              </div>
             )}
 
-            {/* Hero Milk -> Paneer Lineage Graph */}
-            <LineageGraph
-              batches={batches}
-              links={links}
-              distributions={distributions}
-              selectedBatchId={selectedBatch.id}
-              onSelectBatch={(id) => chooseBatch(id)}
-              onOpenRecallModal={onOpenRecall}
-              onViewPassport={onViewPassport}
+            {/* TAB NAVIGATION FOR SELECTED BATCH */}
+            <Tabs
+              tabs={batchTabs}
+              value={batchTab}
+              onChange={setBatchTab}
+              label="Batch Audit Sections"
             />
 
-            {/* Complaints bound to this batch */}
-            <ComplaintInbox
-              complaints={visibleComplaints}
-              loading={complaintLoading}
-              error={complaintError}
-              isQA={isQA}
-              onRefresh={loadComplaints}
-              onSelectBatch={(id) => chooseBatch(id)}
-              onUpdateStatus={handleUpdateComplaintStatus}
-              onDeleteComplaint={handleDeleteComplaint}
-              onSafetyAction={(bId, reason) => onOpenRecall(bId, reason)}
-              busyId={busyComplaintId}
-            />
+            {/* TAB 1: Supply Chain Journey */}
+            <TabPanel id="journey" value={batchTab}>
+              <LineageGraph
+                batches={batches}
+                links={links}
+                distributions={distributions}
+                selectedBatchId={selectedBatch.id}
+                onSelectBatch={(id) => chooseBatch(id)}
+                onOpenRecallModal={onOpenRecall}
+                onViewPassport={onViewPassport}
+                compact={false}
+              />
+            </TabPanel>
 
-            <div className="grid gap-4 lg:grid-cols-2">
-              {/* Quality Checks + QA Add Quality Record */}
-              <Section
-                title="Quality checks & lab certificates"
-                subtitle="3-tier evidence records (Supplier-entered, Document-checked, Verified)"
-                count={`${quality.length} ${quality.length === 1 ? 'record' : 'records'}`}
-                defaultOpen={true}
+            {/* TAB 2: Physical Inspections */}
+            <TabPanel id="inspections" value={batchTab}>
+              <SectionCard
+                title="Physical Security Checks &amp; Storage Conditions"
+                description="Tamper seal verification, digital temperature/humidity telemetry, and immutable SHA-256 evidence."
+                count={inspections.length}
+                actions={
+                  <button
+                    type="button"
+                    onClick={() => setFormOpen(true)}
+                    className="btn btn-primary btn-sm"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Record Inspection
+                  </button>
+                }
               >
-                {isQA && (
-                  <div className="mb-3 flex justify-end">
+                {loadingDetails ? (
+                  <Spinner label="Loading inspection records…" />
+                ) : inspections.length ? (
+                  <div className="space-y-3">
+                    {inspections.map((check) => (
+                      <article
+                        key={check.id}
+                        className={`card p-4 ${
+                          check.verdict === 'PASSED'
+                            ? 'border-emerald-200 bg-emerald-50/30'
+                            : 'border-amber-200 bg-amber-50/40'
+                        }`}
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-sm font-bold text-ink-900">
+                                {humanize(check.verdict)} · Physical Check #{check.id}
+                              </h3>
+                              <Badge tone={check.verdict === 'PASSED' ? 'safe' : 'warn'}>
+                                Seal: {check.tamper_seal_condition}
+                              </Badge>
+                            </div>
+                            <p className="mt-1 text-xs text-ink-500">
+                              Inspector: {check.inspector_name} · {formatDateTime(check.created_at)}
+                            </p>
+                          </div>
+                          <span className="font-mono text-xs text-ink-500">
+                            Measured: {check.actual_quantity} {unitFor(selectedBatch.product_type)}
+                          </span>
+                        </div>
+
+                        <div className="mt-3 grid gap-2 text-xs text-ink-700 sm:grid-cols-3 border-t border-ink-100 pt-2">
+                          <span className="flex items-center gap-1">
+                            <Thermometer className="h-3.5 w-3.5 text-brand-700" />
+                            {check.temperature_c}°C · {check.humidity_percent}% humidity
+                          </span>
+                          <span>
+                            {check.cold_chain_compliant ? 'Cold chain compliant' : 'Cold chain not compliant'}
+                          </span>
+                          <span className="truncate font-mono" title={check.record_sha256 || ''}>
+                            <Fingerprint className="h-3.5 w-3.5 text-brand-700 mr-1 inline" />
+                            SHA-256: {check.record_sha256 ? `${check.record_sha256.slice(0, 16)}…` : 'Recorded'}
+                          </span>
+                        </div>
+
+                        {check.notes && <p className="mt-2 text-xs text-ink-600">{check.notes}</p>}
+
+                        {check.evidence_url && (
+                          <div className="mt-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                api
+                                  .openEvidence(check.evidence_url)
+                                  .catch((e) => onNotify?.(e.message, 'error'))
+                              }
+                              className="text-xs font-semibold text-brand-800 underline hover:text-brand-950"
+                            >
+                              View photographic evidence
+                            </button>
+                          </div>
+                        )}
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState
+                    icon={ClipboardCheck}
+                    title="No physical inspections recorded"
+                    action={
+                      <button
+                        type="button"
+                        onClick={() => setFormOpen(true)}
+                        className="btn btn-primary btn-sm"
+                      >
+                        Record first security check
+                      </button>
+                    }
+                  >
+                    Perform a physical seal inspection to verify cold-chain integrity and record SHA-256 evidence.
+                  </EmptyState>
+                )}
+              </SectionCard>
+            </TabPanel>
+
+            {/* TAB 3: Quality Lab Tests & Certificates */}
+            <TabPanel id="quality" value={batchTab}>
+              <SectionCard
+                title="Lab Quality Tests &amp; Purity Certificates"
+                description="Evidence-linked compositional metrics (Fat, SNF, Acidity) and NABL chemical sign-offs."
+                count={quality.length}
+                actions={
+                  isQA && (
                     <button
                       type="button"
                       onClick={() => setQualityFormOpen((v) => !v)}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-900 hover:bg-emerald-100"
+                      className="btn btn-primary btn-sm"
                     >
                       <Plus className="h-3.5 w-3.5" />
                       {qualityFormOpen ? 'Cancel' : 'Add Quality Record'}
                     </button>
-                  </div>
-                )}
-
+                  )
+                }
+              >
+                {/* Form to attach new lab record */}
                 {isQA && qualityFormOpen && (
                   <form
                     onSubmit={handleAddQualityRecord}
-                    className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4 space-y-3 text-xs"
+                    className="mb-5 card p-4 border-brand-200 bg-brand-50/40 space-y-3"
                   >
-                    <strong className="block text-emerald-950 text-xs uppercase tracking-wider">
-                      Attach Lab Quality Record ({selectedBatch.id})
-                    </strong>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <h3 className="section-title text-sm font-bold text-brand-950">
+                      Attach Quality Test Certificate ({selectedBatch.id})
+                    </h3>
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                       <div>
-                        <label className="block font-semibold text-stone-700 mb-1">Lab Name</label>
+                        <label className="label text-xs">Laboratory Name</label>
                         <input
                           type="text"
                           required
                           value={newQuality.lab_name}
-                          onChange={(e) =>
-                            setNewQuality({ ...newQuality, lab_name: e.target.value })
-                          }
-                          className="w-full rounded-lg border border-stone-300 bg-white px-2.5 py-1.5"
+                          onChange={(e) => setNewQuality({ ...newQuality, lab_name: e.target.value })}
+                          className="field text-xs min-h-[38px]"
                         />
                       </div>
                       <div>
-                        <label className="block font-semibold text-stone-700 mb-1">
-                          Trust Classification
-                        </label>
+                        <label className="label text-xs">Trust Classification</label>
                         <select
                           value={newQuality.trust_level}
-                          onChange={(e) =>
-                            setNewQuality({ ...newQuality, trust_level: e.target.value })
-                          }
-                          className="w-full rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 font-semibold"
+                          onChange={(e) => setNewQuality({ ...newQuality, trust_level: e.target.value })}
+                          className="field text-xs min-h-[38px]"
                         >
-                          <option value="VERIFIED">VERIFIED (NABL Chemist)</option>
-                          <option value="DOCUMENT_CHECKED">DOCUMENT_CHECKED (COA)</option>
-                          <option value="SUPPLIER_ENTERED">SUPPLIER_ENTERED</option>
+                          <option value="VERIFIED">VERIFIED (NABL Chemist Sign-Off)</option>
+                          <option value="DOCUMENT_CHECKED">DOCUMENT_CHECKED (Lab Certificate)</option>
+                          <option value="SUPPLIER_ENTERED">SUPPLIER_ENTERED (Collection Desk)</option>
                         </select>
                       </div>
                       <div>
-                        <label className="block font-semibold text-stone-700 mb-1">Fat %</label>
+                        <label className="label text-xs">Fat %</label>
                         <input
                           type="number"
                           step="0.1"
                           required
                           value={newQuality.fat_percentage}
-                          onChange={(e) =>
-                            setNewQuality({ ...newQuality, fat_percentage: e.target.value })
-                          }
-                          className="w-full rounded-lg border border-stone-300 bg-white px-2.5 py-1.5"
+                          onChange={(e) => setNewQuality({ ...newQuality, fat_percentage: e.target.value })}
+                          className="field text-xs min-h-[38px]"
                         />
                       </div>
                       <div>
-                        <label className="block font-semibold text-stone-700 mb-1">SNF %</label>
+                        <label className="label text-xs">SNF %</label>
                         <input
                           type="number"
                           step="0.1"
                           required
                           value={newQuality.snf_percentage}
-                          onChange={(e) =>
-                            setNewQuality({ ...newQuality, snf_percentage: e.target.value })
-                          }
-                          className="w-full rounded-lg border border-stone-300 bg-white px-2.5 py-1.5"
+                          onChange={(e) => setNewQuality({ ...newQuality, snf_percentage: e.target.value })}
+                          className="field text-xs min-h-[38px]"
                         />
                       </div>
                       <div>
-                        <label className="block font-semibold text-stone-700 mb-1">Acidity %</label>
+                        <label className="label text-xs">Acidity %</label>
                         <input
                           type="number"
                           step="0.01"
                           required
                           value={newQuality.acidity}
-                          onChange={(e) =>
-                            setNewQuality({ ...newQuality, acidity: e.target.value })
-                          }
-                          className="w-full rounded-lg border border-stone-300 bg-white px-2.5 py-1.5"
+                          onChange={(e) => setNewQuality({ ...newQuality, acidity: e.target.value })}
+                          className="field text-xs min-h-[38px]"
                         />
                       </div>
                       <div>
-                        <label className="block font-semibold text-stone-700 mb-1">
-                          Adulterant Screen
-                        </label>
+                        <label className="label text-xs">Adulterant Screen</label>
                         <select
                           value={newQuality.adulterant_test}
-                          onChange={(e) =>
-                            setNewQuality({ ...newQuality, adulterant_test: e.target.value })
-                          }
-                          className="w-full rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 font-semibold"
+                          onChange={(e) => setNewQuality({ ...newQuality, adulterant_test: e.target.value })}
+                          className="field text-xs min-h-[38px]"
                         >
-                          <option value="NEGATIVE">NEGATIVE (Pass)</option>
-                          <option value="SUSPECTED">SUSPECTED</option>
-                          <option value="POSITIVE">POSITIVE (Fail)</option>
+                          <option value="NEGATIVE">NEGATIVE (Passed standard)</option>
+                          <option value="SUSPECTED">SUSPECTED (Anomalous)</option>
+                          <option value="POSITIVE">POSITIVE (Failed standard)</option>
                         </select>
                       </div>
                     </div>
-                    <div className="flex justify-end">
-                      <button
-                        type="submit"
-                        className="rounded-lg bg-emerald-800 px-3.5 py-1.5 font-bold text-white hover:bg-emerald-900"
-                      >
-                        Save Quality Record
+                    <div className="flex justify-end pt-2">
+                      <button type="submit" className="btn btn-primary btn-sm">
+                        Save Lab Record
                       </button>
                     </div>
                   </form>
                 )}
 
                 {loadingDetails ? (
-                  <p className="text-sm text-stone-500">Loading quality details…</p>
+                  <Spinner label="Loading lab quality records…" />
                 ) : quality.length ? (
                   <div className="space-y-3">
-                    {quality.map((record) => (
-                      <article
-                        key={record.id}
-                        className="rounded-xl border border-stone-200 p-4"
-                      >
+                    {quality.map((q) => (
+                      <article key={q.id} className="card p-4">
                         <div className="flex flex-wrap items-start justify-between gap-2">
                           <div>
-                            <h3 className="text-sm font-bold text-stone-900">
-                              {record.lab_name}
-                            </h3>
-                            <p className="mt-1 text-xs text-stone-500">
-                              {prettyDate(record.test_date)}
+                            <h4 className="text-sm font-bold text-ink-900">{q.lab_name}</h4>
+                            <p className="text-xs text-ink-500 mt-0.5">
+                              Tested on {formatDateTime(q.test_date)}
                             </p>
                           </div>
-                          <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-800 border border-emerald-200">
-                            {record.trust_level?.replaceAll('_', ' ')}
+                          <Badge tone={q.trust_level === 'VERIFIED' ? 'safe' : q.trust_level === 'DOCUMENT_CHECKED' ? 'info' : 'warn'}>
+                            {humanize(q.trust_level)}
+                          </Badge>
+                        </div>
+                        <div className="mt-3 flex flex-wrap items-center gap-4 text-xs font-semibold text-ink-800">
+                          <span>Fat: {q.fat_percentage}%</span>
+                          <span>SNF: {q.snf_percentage}%</span>
+                          <span>Acidity: {q.acidity}%</span>
+                          <span className={q.adulterant_test === 'NEGATIVE' ? 'text-emerald-700' : 'text-red-700'}>
+                            Adulterant: {q.adulterant_test}
                           </span>
                         </div>
-                        <p className="mt-3 text-sm font-semibold text-stone-700">
-                          Fat {record.fat_percentage}% · SNF {record.snf_percentage}% · Acidity{' '}
-                          {record.acidity}% · Adulterant{' '}
-                          <span
-                            className={
-                              record.adulterant_test === 'NEGATIVE'
-                                ? 'text-emerald-700'
-                                : 'text-rose-700'
-                            }
-                          >
-                            {record.adulterant_test}
-                          </span>
-                        </p>
-                        {record.contaminant_details && (
-                          <p className="mt-1 text-xs text-stone-500">
-                            {record.contaminant_details}
-                          </p>
+                        {q.contaminant_details && (
+                          <p className="mt-2 text-xs text-ink-600">{q.contaminant_details}</p>
                         )}
                       </article>
                     ))}
                   </div>
                 ) : (
-                  <p className="rounded-xl bg-stone-50 p-4 text-sm text-stone-600">
-                    No lab quality record is attached to this batch yet.
-                  </p>
+                  <EmptyState
+                    icon={FlaskConical}
+                    title="No quality test certificates recorded"
+                  >
+                    {isQA
+                      ? 'Add a laboratory test certificate to certify compositional quality.'
+                      : 'No lab certificates have been submitted for this batch.'}
+                  </EmptyState>
                 )}
-              </Section>
+              </SectionCard>
+            </TabPanel>
 
-              {/* Deliveries + QA Dispatch Form */}
-              <Section
-                title="Retail & distributor deliveries"
-                subtitle="Downstream stores holding this batch or paneer crafted from it"
-                count={`${relatedDeliveries.length} ${
-                  relatedDeliveries.length === 1 ? 'delivery' : 'deliveries'
-                }`}
-                defaultOpen={true}
-              >
-                {isQA && (
-                  <div className="mb-3 flex justify-end">
+            {/* TAB 4: Retail Deliveries */}
+            <TabPanel id="deliveries" value={batchTab}>
+              <SectionCard
+                title="Store &amp; Distributor Dispatches"
+                description="Downstream distribution points carrying this batch or products crafted from it."
+                count={relatedDeliveries.length}
+                actions={
+                  isQA && (
                     <button
                       type="button"
                       onClick={() => setDispatchFormOpen((v) => !v)}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-900 hover:bg-emerald-100"
+                      className="btn btn-primary btn-sm"
                     >
                       <Plus className="h-3.5 w-3.5" />
                       {dispatchFormOpen ? 'Cancel' : 'Dispatch to Store'}
                     </button>
-                  </div>
-                )}
-
+                  )
+                }
+              >
+                {/* Form to record dispatch */}
                 {isQA && dispatchFormOpen && (
                   <form
                     onSubmit={handleCreateDispatch}
-                    className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4 space-y-3 text-xs"
+                    className="mb-5 card p-4 border-brand-200 bg-brand-50/40 space-y-3"
                   >
-                    <strong className="block text-emerald-950 text-xs uppercase tracking-wider">
+                    <h3 className="section-title text-sm font-bold text-brand-950">
                       Record Store Dispatch ({selectedBatch.id})
-                    </strong>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    </h3>
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                       <div>
-                        <label className="block font-semibold text-stone-700 mb-1">
-                          Store / Distributor Name
-                        </label>
+                        <label className="label text-xs">Store / Retailer</label>
                         <input
                           type="text"
                           required
                           placeholder="e.g. Retailer D (Baner)"
                           value={newDispatch.destination_name}
-                          onChange={(e) =>
-                            setNewDispatch({ ...newDispatch, destination_name: e.target.value })
-                          }
-                          className="w-full rounded-lg border border-stone-300 bg-white px-2.5 py-1.5"
+                          onChange={(e) => setNewDispatch({ ...newDispatch, destination_name: e.target.value })}
+                          className="field text-xs min-h-[38px]"
                         />
                       </div>
                       <div>
-                        <label className="block font-semibold text-stone-700 mb-1">Location</label>
+                        <label className="label text-xs">Location</label>
                         <input
                           type="text"
                           required
                           value={newDispatch.location}
-                          onChange={(e) =>
-                            setNewDispatch({ ...newDispatch, location: e.target.value })
-                          }
-                          className="w-full rounded-lg border border-stone-300 bg-white px-2.5 py-1.5"
+                          onChange={(e) => setNewDispatch({ ...newDispatch, location: e.target.value })}
+                          className="field text-xs min-h-[38px]"
                         />
                       </div>
                       <div>
-                        <label className="block font-semibold text-stone-700 mb-1">
-                          Quantity Dispatched
-                        </label>
+                        <label className="label text-xs">Quantity (kg / L)</label>
                         <input
                           type="number"
                           min="1"
                           required
                           value={newDispatch.quantity_dispatched}
-                          onChange={(e) =>
-                            setNewDispatch({
-                              ...newDispatch,
-                              quantity_dispatched: e.target.value,
-                            })
-                          }
-                          className="w-full rounded-lg border border-stone-300 bg-white px-2.5 py-1.5"
+                          onChange={(e) => setNewDispatch({ ...newDispatch, quantity_dispatched: e.target.value })}
+                          className="field text-xs min-h-[38px]"
                         />
                       </div>
                       <div>
-                        <label className="block font-semibold text-stone-700 mb-1">
-                          Contact Phone
-                        </label>
+                        <label className="label text-xs">Contact Phone</label>
                         <input
                           type="text"
                           required
                           value={newDispatch.contact_phone}
-                          onChange={(e) =>
-                            setNewDispatch({ ...newDispatch, contact_phone: e.target.value })
-                          }
-                          className="w-full rounded-lg border border-stone-300 bg-white px-2.5 py-1.5"
+                          onChange={(e) => setNewDispatch({ ...newDispatch, contact_phone: e.target.value })}
+                          className="field text-xs min-h-[38px]"
                         />
                       </div>
                     </div>
-                    <div className="flex justify-end">
-                      <button
-                        type="submit"
-                        className="rounded-lg bg-emerald-800 px-3.5 py-1.5 font-bold text-white hover:bg-emerald-900"
-                      >
+                    <div className="flex justify-end pt-2">
+                      <button type="submit" className="btn btn-primary btn-sm">
                         Save Dispatch
                       </button>
                     </div>
@@ -1169,252 +1171,211 @@ export default function InspectorHub({
                     {relatedDeliveries.map((delivery) => (
                       <div
                         key={delivery.id}
-                        className="flex items-center justify-between gap-3 rounded-xl border border-stone-200 p-3"
+                        className="card flex items-center justify-between p-3"
                       >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <Store className="h-4 w-4 shrink-0 text-emerald-800" />
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-stone-800">
-                              {delivery.destination_name}
-                            </p>
-                            <p className="text-xs text-stone-500">
-                              {delivery.location} · {delivery.quantity_dispatched} kg · Batch{' '}
-                              {delivery.batch_id}
+                        <div className="flex items-center gap-3">
+                          <Store className="h-5 w-5 text-brand-700 shrink-0" />
+                          <div>
+                            <p className="text-sm font-semibold text-ink-900">{delivery.destination_name}</p>
+                            <p className="text-xs text-ink-500">
+                              {delivery.location} · Dispatched {delivery.quantity_dispatched} kg · Batch {delivery.batch_id}
                             </p>
                           </div>
                         </div>
-                        <span className="text-xs font-mono text-stone-500">
-                          {delivery.contact_phone}
-                        </span>
+                        <span className="font-mono text-xs text-ink-600">{delivery.contact_phone}</span>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="rounded-xl bg-stone-50 p-4 text-sm text-stone-600">
-                    No delivery has been recorded for this batch or connected products.
-                  </p>
+                  <EmptyState
+                    icon={Store}
+                    title="No retail dispatches recorded"
+                  >
+                    No downstream store or distributor shipments have been registered for this batch yet.
+                  </EmptyState>
                 )}
-              </Section>
+              </SectionCard>
+            </TabPanel>
 
-              {/* Security & Audit History */}
-              <div className="lg:col-span-2">
-                <Section
-                  title="Security inspections & recall audit log"
-                  subtitle="Tamper-evident SHA-256 physical inspections and statutory recall events"
-                  count={`${inspections.length + relevantRecallIds.length} events`}
-                  defaultOpen={true}
-                >
-                  {historyError && (
-                    <p
-                      role="alert"
-                      className="mb-3 rounded-xl bg-rose-50 p-3 text-sm text-rose-800"
-                    >
-                      {historyError}
-                    </p>
-                  )}
-                  {loadingDetails ? (
-                    <p className="text-sm text-stone-500">Loading audit history…</p>
-                  ) : inspections.length || recalls.length ? (
-                    <div className="space-y-3">
-                      {inspections.map((inspection) => (
-                        <article
-                          key={`inspection-${inspection.id}`}
-                          className={`rounded-xl border p-4 ${
-                            inspection.verdict === 'PASSED'
-                              ? 'border-emerald-200 bg-emerald-50/40'
-                              : 'border-amber-200 bg-amber-50/50'
-                          }`}
-                        >
-                          <div className="flex flex-wrap items-start justify-between gap-2">
-                            <div>
-                              <p className="text-sm font-bold text-stone-900">
-                                {inspection.verdict.replaceAll('_', ' ')} · Physical Security Check
-                              </p>
-                              <p className="mt-1 text-xs text-stone-500">
-                                Verified Actor: {inspection.inspector_name} ·{' '}
-                                {prettyDate(inspection.created_at)}
-                              </p>
-                            </div>
-                            <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-stone-600 border border-stone-200">
-                              Seal {inspection.tamper_seal_condition.toLowerCase()}
-                            </span>
+            {/* TAB 5: QMS Complaints Bound to Batch */}
+            <TabPanel id="complaints" value={batchTab}>
+              <ComplaintInbox
+                complaints={visibleComplaints}
+                loading={complaintLoading}
+                error={complaintError}
+                isQA={isQA}
+                onRefresh={loadComplaints}
+                onSelectBatch={(id) => chooseBatch(id)}
+                onUpdateStatus={handleUpdateComplaintStatus}
+                onDeleteComplaint={handleDeleteComplaint}
+                onSafetyAction={(bId, reason) => onOpenRecall?.(bId, reason)}
+                busyId={busyComplaintId}
+              />
+            </TabPanel>
+
+            {/* TAB 6: Recalls & Statutory Notices */}
+            <TabPanel id="recalls" value={batchTab}>
+              <SectionCard
+                title="Recall Audit Log &amp; Regulatory Notices"
+                description="Statutory FSSAI recalls, blast radius simulations, and public safety alerts."
+                count={recalls.length}
+                actions={
+                  <button
+                    type="button"
+                    onClick={() => onOpenRecall?.(selectedBatch.id)}
+                    className="btn btn-danger-soft btn-sm"
+                  >
+                    <ShieldAlert className="h-3.5 w-3.5 text-red-600" />
+                    Simulate / Issue Recall
+                  </button>
+                }
+              >
+                {recalls.length ? (
+                  <div className="space-y-3">
+                    {recalls.map((event) => (
+                      <article key={event.id} className="card p-4 border-red-200 bg-red-50/40">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <AlertTriangle className="h-4 w-4 text-red-700" />
+                            <h4 className="text-sm font-bold text-red-950">
+                              Recall Notice #{event.id} · {event.severity}
+                            </h4>
                           </div>
-                          <div className="mt-3 grid gap-2 text-xs text-stone-600 sm:grid-cols-3">
-                            <span>
-                              <Thermometer className="mr-1 inline h-3.5 w-3.5" />
-                              {inspection.temperature_c}°C · {inspection.humidity_percent}% humidity
-                            </span>
-                            <span>
-                              {inspection.cold_chain_compliant
-                                ? 'Cold chain confirmed'
-                                : 'Cold chain not confirmed'}
-                            </span>
-                            <span className="truncate font-mono" title={inspection.record_sha256}>
-                              <Fingerprint className="mr-1 inline h-3.5 w-3.5" />
-                              SHA-256: {inspection.record_sha256?.slice(0, 18)}…
-                            </span>
-                          </div>
-                          {inspection.notes && (
-                            <p className="mt-3 text-sm text-stone-700">{inspection.notes}</p>
-                          )}
-                          {inspection.evidence_url && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                api
-                                  .openEvidence(inspection.evidence_url)
-                                  .catch((e) => onNotify(e.message, 'error'))
-                              }
-                              className="mt-3 inline-flex text-xs font-bold text-emerald-800 underline"
-                            >
-                              View authenticated photo evidence
-                            </button>
-                          )}
-                        </article>
-                      ))}
-
-                      {recalls.map((event) => (
-                        <article
-                          key={`recall-${event.id}`}
-                          className="rounded-xl border border-rose-200 bg-rose-50/70 p-4"
-                        >
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 text-sm font-bold text-rose-900">
-                              <AlertTriangle className="h-4 w-4" />
-                              Statutory Recall Event #{event.id} · {event.severity}
-                            </div>
-                            {isQA && onOpenFssaiNotice && (
-                              <button
-                                type="button"
-                                onClick={() => onOpenFssaiNotice(event.id)}
-                                className="inline-flex items-center gap-1.5 rounded-lg border border-rose-300 bg-white px-3 py-1 text-xs font-bold text-rose-900 hover:bg-rose-50"
-                              >
-                                <FileText className="h-3.5 w-3.5" />
-                                Export FSSAI Notice
-                              </button>
-                            )}
-                          </div>
-                          <p className="mt-1 text-xs text-rose-800">
-                            {prettyDate(event.created_at)} · Initiated by {event.initiated_by}
-                          </p>
-                          <p className="mt-2 text-sm text-rose-900">{event.reason}</p>
-                        </article>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="rounded-xl bg-stone-50 p-4 text-sm text-stone-600">
-                      No manual inspection or recall events are recorded for this batch yet.
-                    </p>
-                  )}
-                </Section>
-              </div>
-            </div>
-          </div>
-        ) : (
-          /* Staff Dashboard Overview (No Specific Batch Selected Yet) */
-          <div className="space-y-6">
-            {/* Supply-Chain Genealogy Overview */}
-            <LineageGraph
-              batches={batches}
-              links={links}
-              distributions={distributions}
-              selectedBatchId={batches[0]?.id || 'MILK-101'}
-              onSelectBatch={(id) => chooseBatch(id)}
-              onOpenRecallModal={onOpenRecall}
-              onViewPassport={onViewPassport}
-            />
-
-            {/* Global Complaint Inbox */}
-            <ComplaintInbox
-              complaints={visibleComplaints}
-              loading={complaintLoading}
-              error={complaintError}
-              isQA={isQA}
-              onRefresh={loadComplaints}
-              onSelectBatch={(id) => chooseBatch(id)}
-              onUpdateStatus={handleUpdateComplaintStatus}
-              onDeleteComplaint={handleDeleteComplaint}
-              onSafetyAction={(bId, reason) => onOpenRecall(bId, reason)}
-              busyId={busyComplaintId}
-            />
-
-            {/* Recent Safety & Recall Activity */}
-            <Section
-              title="Recent safety & recall activity across all batches"
-              subtitle="Latest physical inspections and statutory recall notices"
-              count={`${globalInspections.length + globalRecalls.length} events`}
-              defaultOpen={true}
-            >
-              {historyError && (
-                <p
-                  role="alert"
-                  className="mb-3 rounded-xl bg-rose-50 p-3 text-sm text-rose-800"
-                >
-                  {historyError}
-                </p>
-              )}
-              {globalInspections.length || globalRecalls.length ? (
-                <div className="space-y-2">
-                  {[
-                    ...globalInspections
-                      .slice(0, 6)
-                      .map((event) => ({ ...event, event_type: 'inspection' })),
-                    ...globalRecalls
-                      .slice(0, 6)
-                      .map((event) => ({ ...event, event_type: 'recall' })),
-                  ]
-                    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-                    .slice(0, 8)
-                    .map((event) => (
-                      <div
-                        key={`${event.event_type}-${event.id}`}
-                        className="flex min-h-14 w-full items-center justify-between gap-4 rounded-xl border border-stone-200 px-4 py-3 hover:bg-stone-50"
-                      >
-                        <button
-                          type="button"
-                          onClick={() =>
-                            chooseBatch(event.batch_id || event.root_batch_id)
-                          }
-                          className="flex-1 text-left"
-                        >
-                          <strong className="block text-sm text-stone-900">
-                            {event.event_type === 'recall'
-                              ? `Statutory Recall #${event.id} · ${event.root_batch_id} (${event.severity})`
-                              : `${
-                                  event.verdict?.replaceAll('_', ' ') || 'Inspection'
-                                } · Batch ${event.batch_id}`}
-                          </strong>
-                          <span className="mt-0.5 block text-xs text-stone-500">
-                            {event.event_type === 'recall'
-                              ? `${event.reason} · by ${event.initiated_by}`
-                              : `By ${event.inspector_name}`}
-                            {' · '}
-                            {prettyDate(event.created_at)}
-                          </span>
-                        </button>
-
-                        <div className="flex items-center gap-2">
-                          {event.event_type === 'recall' && isQA && onOpenFssaiNotice && (
+                          {isQA && onOpenFssaiNotice && (
                             <button
                               type="button"
                               onClick={() => onOpenFssaiNotice(event.id)}
-                              className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-900 hover:bg-amber-100"
+                              className="btn btn-secondary btn-sm"
+                            >
+                              <FileText className="h-3.5 w-3.5" />
+                              Export FSSAI Notice
+                            </button>
+                          )}
+                        </div>
+                        <p className="mt-1 text-xs text-red-800">
+                          Issued on {formatDateTime(event.created_at)} · Initiated by {event.initiated_by}
+                        </p>
+                        <p className="mt-2 text-xs text-ink-800">{event.reason}</p>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState
+                    icon={ShieldCheck}
+                    title="No recalls on this batch"
+                  >
+                    This batch has zero recorded recalls and is fully cleared in our regulatory registry.
+                  </EmptyState>
+                )}
+              </SectionCard>
+            </TabPanel>
+          </div>
+        ) : (
+          /* ROOT DASHBOARD (NO SPECIFIC BATCH SELECTED) */
+          <div className="space-y-6">
+            <Tabs
+              tabs={dashboardTabs}
+              value={dashboardTab}
+              onChange={setDashboardTab}
+              label="Staff Dashboard Overview"
+            />
+
+            <TabPanel id="overview" value={dashboardTab}>
+              <LineageGraph
+                batches={batches}
+                links={links}
+                distributions={distributions}
+                selectedBatchId={batches[0]?.id || 'MILK-101'}
+                onSelectBatch={(id) => chooseBatch(id)}
+                onOpenRecallModal={onOpenRecall}
+                onViewPassport={onViewPassport}
+                compact={false}
+              />
+            </TabPanel>
+
+            <TabPanel id="complaints" value={dashboardTab}>
+              <ComplaintInbox
+                complaints={visibleComplaints}
+                loading={complaintLoading}
+                error={complaintError}
+                isQA={isQA}
+                onRefresh={loadComplaints}
+                onSelectBatch={(id) => chooseBatch(id)}
+                onUpdateStatus={handleUpdateComplaintStatus}
+                onDeleteComplaint={handleDeleteComplaint}
+                onSafetyAction={(bId, reason) => onOpenRecall?.(bId, reason)}
+                busyId={busyComplaintId}
+              />
+            </TabPanel>
+
+            <TabPanel id="activity" value={dashboardTab}>
+              <SectionCard
+                title="Recent Inspections &amp; Statutory Recalls"
+                description="Live log of physical field checks and food safety events across all facility vats."
+                count={globalInspections.length + globalRecalls.length}
+              >
+                {globalInspections.length || globalRecalls.length ? (
+                  <div className="space-y-3">
+                    {globalRecalls.map((event) => (
+                      <article key={`global-recall-${event.id}`} className="card p-4 border-red-200 bg-red-50/40">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <AlertTriangle className="h-4 w-4 text-red-700" />
+                            <strong className="text-sm font-bold text-red-950">
+                              Statutory Recall Event #{event.id} · Batch {event.root_batch_id}
+                            </strong>
+                          </div>
+                          {isQA && onOpenFssaiNotice && (
+                            <button
+                              type="button"
+                              onClick={() => onOpenFssaiNotice(event.id)}
+                              className="btn btn-secondary btn-sm"
                             >
                               <FileText className="h-3.5 w-3.5" />
                               FSSAI Notice
                             </button>
                           )}
-                          <ArrowRight className="h-4 w-4 shrink-0 text-emerald-800" />
                         </div>
-                      </div>
+                        <p className="mt-1 text-xs text-red-800">
+                          {formatDateTime(event.created_at)} · {event.initiated_by}
+                        </p>
+                        <p className="mt-1 text-xs text-ink-800">{event.reason}</p>
+                      </article>
                     ))}
-                </div>
-              ) : (
-                <p className="rounded-xl bg-stone-50 p-4 text-sm text-stone-600">
-                  No inspection or recall activity is recorded yet.
-                </p>
-              )}
-            </Section>
+
+                    {globalInspections.slice(0, 8).map((chk) => (
+                      <article key={`global-chk-${chk.id}`} className="card p-3.5 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <ClipboardCheck className="h-5 w-5 text-brand-700 shrink-0" />
+                          <div>
+                            <p className="text-xs font-bold text-ink-900">
+                              Batch {chk.batch_id} · {humanize(chk.verdict)}
+                            </p>
+                            <p className="text-[11px] text-ink-500">
+                              {chk.inspector_name} · {formatDateTime(chk.created_at)} · Seal: {chk.tamper_seal_condition}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => chooseBatch(chk.batch_id)}
+                          className="btn btn-secondary btn-sm"
+                        >
+                          Audit Batch
+                        </button>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState
+                    icon={ClipboardCheck}
+                    title="No recent audit activity"
+                  >
+                    No physical inspections or statutory recall events are logged yet.
+                  </EmptyState>
+                )}
+              </SectionCard>
+            </TabPanel>
           </div>
         )}
       </main>

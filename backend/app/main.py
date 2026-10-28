@@ -12,7 +12,7 @@ if BACKEND_DIR not in sys.path:
 
 from app.complaints import router as complaints_router
 from app.complaints.agent import configured_model, llm_is_configured
-from app.database import engine, init_db
+from app.database import engine, init_db, DATABASE_URL
 from app.routers import auth, batches, inspections, public, quality, recall
 from app.security import assert_production_ready
 
@@ -21,7 +21,8 @@ from app.security import assert_production_ready
 async def lifespan(app: FastAPI):
     """Initialize SQLite/PostgreSQL schema on application startup."""
     assert_production_ready()
-    init_db()
+    if DATABASE_URL.startswith("sqlite"):
+        init_db()
     yield
     engine.dispose()
 

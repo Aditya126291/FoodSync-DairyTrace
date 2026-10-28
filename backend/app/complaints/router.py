@@ -212,7 +212,7 @@ def commit_complaint(
         priority=normalize_priority(form.priority, narrative),
         risk_assessment=risk,
         root_cause=request.rootCause or root,
-        capa_json=json.dumps(request.capaRecommendations or capa),
+        capa_json=request.capaRecommendations or capa,
         status="Committed",
         reporter_user_id=user.id if user else None,
     )
@@ -288,7 +288,7 @@ def update_complaint(
     if request.rootCause:
         record.root_cause = request.rootCause
     if request.capaRecommendations:
-        record.capa_json = json.dumps(request.capaRecommendations)
+        record.capa_json = request.capaRecommendations
     write_audit(db, user, "COMPLAINT_EDITED", "complaint", record.complaint_number)
     db.commit()
     db.refresh(record)

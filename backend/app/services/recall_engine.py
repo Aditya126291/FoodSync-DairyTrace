@@ -335,8 +335,8 @@ def execute_recall(
         severity=severity,
         initiated_by=initiated_by,
         status="ACTIVE",
-        affected_batches_json=json.dumps(affected_ids),
-        affected_destinations_json=json.dumps(dest_dicts),
+        affected_batches_json=affected_ids,
+        affected_destinations_json=dest_dicts,
     )
     db_session.add(recall_event)
     db_session.commit()

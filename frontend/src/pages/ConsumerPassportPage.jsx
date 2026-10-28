@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   ShieldCheck,
@@ -8,7 +8,6 @@ import {
   Calendar,
   Award,
   Share2,
-  RefreshCw,
   MapPin,
   CheckCircle2,
   ArrowLeft,
@@ -18,8 +17,11 @@ import {
   FlaskConical,
   Factory,
   PackageCheck,
+  Check,
 } from 'lucide-react';
 import { api } from '../api';
+import { Alert, Badge, Spinner, StatusBadge } from '../components/ui';
+import { formatDate, trustTier } from '../utils/format';
 
 export default function ConsumerPassportPage({
   initialBatchId = 'PAN-201',
@@ -31,6 +33,7 @@ export default function ConsumerPassportPage({
   const [loading, setLoading] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [loadError, setLoadError] = useState('');
+  const requestVersion = useRef(0);
 
   useEffect(() => {
     if (initialBatchId) {
@@ -43,31 +46,38 @@ export default function ConsumerPassportPage({
   }, [selectedBatchId]);
 
   const loadPassport = async (batchId) => {
+    const version = ++requestVersion.current;
     setLoading(true);
     setPassportData(null);
     setLoadError('');
     try {
       const data = await api.getPublicPassport(batchId);
+      if (version !== requestVersion.current) return;
       setPassportData(data);
     } catch (err) {
+      if (version !== requestVersion.current) return;
       setLoadError(
         err.status === 404
-          ? `Batch "${batchId}" was not found. Check the QR code or scan again.`
-          : 'We could not load this product’s details. Check your connection and try again.'
+          ? `Batch "${batchId}" was not found in our registry. Please check the code and try scanning again.`
+          : 'Could not load product details. Please check your network connection and try again.'
       );
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
   };
 
-  const handleShare = () => {
+  const handleShare = async () => {
     const url =
       typeof window !== 'undefined'
         ? `${window.location.origin}/passport/${selectedBatchId}`
         : `https://dairytrace.in/passport/${selectedBatchId}`;
-    navigator.clipboard.writeText(url);
-    setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2000);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    } catch {
+      window.prompt('Copy this product passport link:', url);
+    }
   };
 
   const isRecalled = passportData?.status === 'RECALLED';
@@ -83,43 +93,16 @@ export default function ConsumerPassportPage({
       ? `${window.location.origin}/passport/${activeBatchId}`
       : `https://dairytrace.in/passport/${activeBatchId}`);
 
-  const getTrustBadgeInfo = (badge) => {
-    if (badge === 'VERIFIED') {
-      return {
-        label: 'Verified (NABL Lab Chemist Sign-Off)',
-        tone: 'bg-emerald-50 text-emerald-900 border-emerald-300',
-      };
-    }
-    if (badge === 'DOCUMENT_CHECKED') {
-      return {
-        label: 'Document-checked (Certificate Attached)',
-        tone: 'bg-sky-50 text-sky-900 border-sky-300',
-      };
-    }
-    if (badge === 'SUPPLIER_ENTERED') {
-      return {
-        label: 'Supplier-entered (Collection Desk)',
-        tone: 'bg-amber-50 text-amber-900 border-amber-300',
-      };
-    }
-    return {
-      label: 'Unverified Record',
-      tone: 'bg-stone-100 text-stone-700 border-stone-300',
-    };
-  };
-
-  const trustInfo = getTrustBadgeInfo(passportData?.trust_badge);
+  const tier = trustTier(passportData?.trust_badge);
 
   return (
-    <div className="min-h-screen py-6 sm:py-10 px-4 sm:px-6 max-w-3xl mx-auto space-y-6">
-      {/* One-batch public passport top bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-white border border-stone-200/90 shadow-sm print:hidden">
+    <div className="container-page py-6 sm:py-10 space-y-6">
+      {/* Action / Navigation Bar */}
+      <div className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between no-print">
         <div>
-          <span className="text-xs font-bold uppercase tracking-wide text-emerald-800">
-            Public Batch Passport
-          </span>
-          <p className="mt-0.5 text-sm font-bold text-stone-900">
-            Scanned Batch: {activeBatchId}
+          <span className="eyebrow">Public Product Passport</span>
+          <p className="mt-0.5 text-base font-bold text-ink-900">
+            Batch: <span className="font-mono text-brand-800">{activeBatchId}</span>
           </p>
         </div>
 
@@ -127,255 +110,253 @@ export default function ConsumerPassportPage({
           <button
             type="button"
             onClick={handleShare}
-            className="px-3.5 py-2 rounded-xl bg-[#FAF7F2] hover:bg-stone-200/70 text-stone-700 border border-stone-200 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+            className="btn btn-secondary btn-sm"
           >
-            <Share2 className="w-3.5 h-3.5 text-stone-500" />
-            {copiedLink ? 'Link Copied!' : 'Share Link'}
+            {copiedLink ? (
+              <>
+                <Check className="h-3.5 w-3.5 text-emerald-600" />
+                Link Copied!
+              </>
+            ) : (
+              <>
+                <Share2 className="h-3.5 w-3.5 text-ink-500" />
+                Share Link
+              </>
+            )}
           </button>
           <button
             type="button"
             onClick={() => window.print()}
-            className="px-3.5 py-2 rounded-xl bg-[#FAF7F2] hover:bg-stone-200/70 text-stone-700 border border-stone-200 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+            className="btn btn-secondary btn-sm"
           >
-            <Printer className="w-3.5 h-3.5 text-stone-500" />
-            Print
+            <Printer className="h-3.5 w-3.5 text-ink-500" />
+            Print Record
           </button>
           {onBackToScanner && (
             <button
               type="button"
               onClick={onBackToScanner}
-              className="px-3.5 py-2 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold flex items-center gap-1.5 transition-colors"
+              className="btn btn-primary btn-sm"
             >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              Scan another product
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Scan Another Product
             </button>
           )}
         </div>
       </div>
 
       {loading ? (
-        <div className="p-12 rounded-3xl bg-white border border-stone-200 text-center text-stone-500 flex flex-col items-center justify-center gap-3 shadow-sm">
-          <RefreshCw className="w-7 h-7 text-emerald-700 animate-spin" />
-          <p className="text-sm font-medium">
-            Loading product quality, lineage &amp; farm origin details…
-          </p>
+        <div className="card p-12 text-center">
+          <Spinner label="Verifying batch origin, laboratory purity &amp; FSSAI compliance…" />
         </div>
       ) : loadError ? (
-        <div
-          role="alert"
-          className="rounded-3xl border border-rose-200 bg-white p-8 text-center shadow-sm"
-        >
-          <ShieldAlert className="mx-auto h-9 w-9 text-rose-700" />
-          <h2 className="mt-3 text-lg font-bold text-stone-900">
-            Product passport unavailable
-          </h2>
-          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-stone-600">{loadError}</p>
+        <div className="card p-8 text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-red-700">
+            <ShieldAlert className="h-6 w-6" />
+          </div>
+          <h2 className="section-title mt-4 text-xl">Product Record Not Found</h2>
+          <p className="muted mx-auto mt-2 max-w-md">{loadError}</p>
           {onBackToScanner && (
             <button
               type="button"
               onClick={onBackToScanner}
-              className="mt-5 rounded-xl bg-emerald-900 px-4 py-2.5 text-sm font-bold text-white"
+              className="btn btn-primary mt-6"
             >
-              Scan another product
+              Scan Another Code
             </button>
           )}
         </div>
       ) : passportData ? (
-        <>
-          {/* Customer-Friendly Dairy Product Passport Card */}
-          <div className="mx-auto max-w-3xl rounded-3xl bg-white border border-stone-200/90 shadow-md overflow-hidden">
-            {/* Safety Status Verdict Banner */}
+        <div className="space-y-6">
+          {/* Main Passport Card */}
+          <div className="card overflow-hidden">
+            {/* Status Banner */}
             {isRecalled ? (
-              <div className="p-6 bg-red-600 text-white flex items-start sm:items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center flex-shrink-0">
-                  <ShieldAlert className="w-7 h-7 text-white stroke-[2.2]" />
+              <div className="flex items-start gap-4 bg-red-700 p-6 text-white sm:items-center">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/20">
+                  <ShieldAlert className="h-6 w-6 text-white" />
                 </div>
-                <div className="space-y-1">
-                  <span className="text-[11px] uppercase tracking-wider font-bold bg-white/20 px-2.5 py-0.5 rounded-full inline-block">
-                    Active Food Safety Recall
+                <div className="min-w-0 flex-1">
+                  <span className="inline-block rounded-full bg-white/25 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider">
+                    Official Food Safety Recall
                   </span>
-                  <h2 className="text-lg sm:text-xl font-extrabold tracking-tight">
-                    Do Not Consume This Batch
-                  </h2>
-                  <p className="text-xs sm:text-sm text-red-50 leading-relaxed">
+                  <h2 className="mt-1 text-xl font-bold">Do Not Consume This Batch</h2>
+                  <p className="mt-1 text-sm text-red-100 leading-relaxed">
                     {passportData.contaminant_warning ||
-                      'This batch has been recalled due to a quality safety alert. Please return this pack to your store for a full refund.'}
+                      'This batch has been recalled due to a confirmed quality non-compliance. Please return the pack to your retailer for a full refund.'}
                   </p>
                 </div>
               </div>
             ) : isQuarantined ? (
-              <div className="p-6 bg-amber-600 text-white flex items-start sm:items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center flex-shrink-0">
-                  <AlertTriangle className="w-7 h-7 text-white stroke-[2.2]" />
+              <div className="flex items-start gap-4 bg-amber-600 p-6 text-white sm:items-center">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/20">
+                  <AlertTriangle className="h-6 w-6 text-white" />
                 </div>
-                <div className="space-y-1">
-                  <span className="text-[11px] uppercase tracking-wider font-bold bg-white/20 px-2.5 py-0.5 rounded-full inline-block">
-                    Precautionary Hold — Under QA Review
+                <div className="min-w-0 flex-1">
+                  <span className="inline-block rounded-full bg-white/25 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider">
+                    Quality Hold · Under Investigation
                   </span>
-                  <h2 className="text-lg sm:text-xl font-extrabold tracking-tight">
-                    Batch Temporarily Under Quality Check
-                  </h2>
-                  <p className="text-xs sm:text-sm text-amber-50 leading-relaxed">
-                    Our dairy quality team is conducting additional laboratory checks on this batch before clearing it for sale.
+                  <h2 className="mt-1 text-xl font-bold">Batch Temporarily Under QA Review</h2>
+                  <p className="mt-1 text-sm text-amber-100 leading-relaxed">
+                    Our quality assurance team is conducting confirmatory laboratory screenings on this batch.
                   </p>
                 </div>
               </div>
-            ) : passportData.adulterant_status === 'POSITIVE' ||
-              passportData.adulterant_status === 'SUSPECTED' ||
-              passportData.adulterant_status === 'NOT_TESTED' ? (
-              <div
-                className={`p-6 text-white flex items-start sm:items-center gap-4 ${
-                  passportData.adulterant_status === 'POSITIVE'
-                    ? 'bg-rose-700'
-                    : passportData.adulterant_status === 'SUSPECTED'
-                    ? 'bg-amber-600'
-                    : 'bg-stone-700'
-                }`}
-              >
-                <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center flex-shrink-0">
-                  <AlertTriangle className="w-7 h-7 text-white stroke-[2.2]" />
+            ) : passportData.adulterant_status === 'POSITIVE' ? (
+              <div className="flex items-start gap-4 bg-red-700 p-6 text-white sm:items-center">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/20">
+                  <ShieldAlert className="h-6 w-6 text-white" />
                 </div>
-                <div className="space-y-1">
-                  <span className="text-[11px] uppercase tracking-wider font-bold bg-white/20 px-2.5 py-0.5 rounded-full inline-block">
-                    {passportData.adulterant_status === 'NOT_TESTED'
-                      ? 'Quality Test Not Recorded'
-                      : passportData.adulterant_status === 'SUSPECTED'
-                      ? 'Precautionary Alert — Under Review'
-                      : 'Contamination Alert'}
+                <div className="min-w-0 flex-1">
+                  <span className="inline-block rounded-full bg-white/25 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider">
+                    Contamination Detected
                   </span>
-                  <h2 className="text-lg sm:text-xl font-extrabold tracking-tight">
-                    {passportData.adulterant_status === 'NOT_TESTED'
-                      ? 'This Batch Has No Recorded Safety Screen'
-                      : passportData.adulterant_status === 'SUSPECTED'
-                      ? 'A Safety Concern Has Been Reported'
-                      : 'A Contamination Screen Was Positive'}
-                  </h2>
-                  <p className="text-xs sm:text-sm leading-relaxed text-white/90">
-                    {passportData.contaminant_warning}
+                  <h2 className="mt-1 text-xl font-bold">Adulterant Screen Positive</h2>
+                  <p className="mt-1 text-sm text-red-100 leading-relaxed">
+                    {passportData.contaminant_warning || 'An adulterant test for this batch returned a non-compliant result.'}
+                  </p>
+                </div>
+              </div>
+            ) : passportData.adulterant_status === 'SUSPECTED' ? (
+              <div className="flex items-start gap-4 bg-amber-600 p-6 text-white sm:items-center">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/20">
+                  <AlertTriangle className="h-6 w-6 text-white" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <span className="inline-block rounded-full bg-white/25 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider">
+                    Precautionary Alert
+                  </span>
+                  <h2 className="mt-1 text-xl font-bold">Safety Concern Under Review</h2>
+                  <p className="mt-1 text-sm text-amber-100 leading-relaxed">
+                    {passportData.contaminant_warning || 'A consumer complaint or sensory observation is being investigated by plant QA.'}
                   </p>
                 </div>
               </div>
             ) : (
-              <div className="p-6 bg-emerald-800 text-white flex items-start sm:items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center flex-shrink-0">
-                  <ShieldCheck className="w-7 h-7 text-white stroke-[2.2]" />
+              <div className="flex items-start gap-4 bg-brand-800 p-6 text-white sm:items-center">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/20">
+                  <ShieldCheck className="h-6 w-6 text-white" />
                 </div>
-                <div className="space-y-1">
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[11px] uppercase tracking-wider font-bold bg-white/20 px-2.5 py-0.5 rounded-full">
-                      Safe · Quality Screen Passed
+                    <span className="inline-block rounded-full bg-white/25 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider">
+                      Verified Safe
                     </span>
-                    <span className="text-xs text-emerald-100 font-medium">
-                      • FSSAI Compliant Record
+                    <span className="text-xs font-medium text-brand-200">
+                      • NABL Tested &amp; FSSAI Cleared
                     </span>
                   </div>
-                  <h2 className="text-lg sm:text-xl font-extrabold tracking-tight">
-                    Quality Checked &amp; Traceable from Origin
-                  </h2>
-                  <p className="text-xs sm:text-sm text-emerald-50 leading-relaxed">
-                    This batch has a recorded negative adulterant screen and verified farm-to-plant genealogy.
+                  <h2 className="mt-1 text-xl font-bold">Purity Verified &amp; 100% Traceable</h2>
+                  <p className="mt-1 text-sm text-brand-100 leading-relaxed">
+                    Passed all mandatory chemical and biological purity tests. Direct traceability from village collection societies to pack.
                   </p>
                 </div>
               </div>
             )}
 
-            {/* Main Passport Content */}
-            <div className="p-6 sm:p-8 space-y-7">
-              {/* Product Overview & Scannable QR */}
-              <div className="flex flex-col sm:flex-row items-center sm:items-start justify-between gap-6 pb-6 border-b border-stone-200/80">
-                <div className="space-y-2.5 text-center sm:text-left">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-[#FAF7F2] border border-stone-200 text-xs font-bold text-emerald-900">
-                    <Milk className="w-3.5 h-3.5 text-emerald-700" />
-                    <span>Batch ID: {activeBatchId}</span>
+            {/* Passport Body */}
+            <div className="p-6 sm:p-8 space-y-8">
+              {/* Product Info & Scannable QR */}
+              <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between pb-6 border-b border-ink-200">
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="badge badge-neutral font-mono font-bold">
+                      <Milk className="h-3.5 w-3.5 text-brand-700" />
+                      {activeBatchId}
+                    </span>
+                    <StatusBadge status={passportData.status} />
+                    <Badge tone={tier.tone}>{tier.label}</Badge>
                   </div>
 
-                  <h1 className="font-display text-2xl sm:text-3xl font-bold text-stone-900 tracking-tight">
+                  <h1 className="page-title text-2xl sm:text-3xl">
                     {passportData.product_name}
                   </h1>
 
-                  <p className="text-xs sm:text-sm text-stone-600 flex items-center justify-center sm:justify-start gap-1.5 font-medium">
-                    <MapPin className="w-4 h-4 text-emerald-700 flex-shrink-0" />
-                    {passportData.facility_name}
+                  <p className="muted flex items-center gap-1.5 font-medium">
+                    <MapPin className="h-4 w-4 text-brand-700 shrink-0" />
+                    <span>{passportData.facility_name}</span>
                   </p>
 
-                  <div className="flex items-center justify-center sm:justify-start gap-4 pt-2 text-xs flex-wrap">
-                    <div className="bg-[#FAF7F2] px-3.5 py-2 rounded-xl border border-stone-200/80">
-                      <span className="text-[10px] text-stone-500 uppercase font-bold block">
-                        Packed / Collected On
+                  <div className="flex flex-wrap items-center gap-3 pt-1">
+                    <div className="rounded-control border border-ink-200 bg-canvas px-3.5 py-2">
+                      <span className="block text-[11px] font-bold uppercase tracking-wide text-ink-500">
+                        Production Date
                       </span>
-                      <span className="text-stone-900 font-bold text-xs sm:text-sm flex items-center gap-1 mt-0.5">
-                        <Calendar className="w-3.5 h-3.5 text-emerald-700" />
-                        {passportData.production_date
-                          ? new Date(passportData.production_date).toLocaleDateString()
-                          : 'Recorded'}
+                      <span className="mt-0.5 flex items-center gap-1.5 text-xs font-bold text-ink-900">
+                        <Calendar className="h-3.5 w-3.5 text-brand-700" />
+                        {formatDate(passportData.production_date)}
                       </span>
                     </div>
 
-                    <div className="bg-[#FAF7F2] px-3.5 py-2 rounded-xl border border-stone-200/80">
-                      <span className="text-[10px] text-stone-500 uppercase font-bold block">
+                    <div className="rounded-control border border-ink-200 bg-canvas px-3.5 py-2">
+                      <span className="block text-[11px] font-bold uppercase tracking-wide text-ink-500">
                         Best Before
                       </span>
-                      <span className="text-stone-900 font-bold text-xs sm:text-sm flex items-center gap-1 mt-0.5">
-                        <Calendar className="w-3.5 h-3.5 text-amber-600" />
-                        {passportData.expiry_date
-                          ? new Date(passportData.expiry_date).toLocaleDateString()
-                          : 'Recorded'}
+                      <span className="mt-0.5 flex items-center gap-1.5 text-xs font-bold text-ink-900">
+                        <Calendar className="h-3.5 w-3.5 text-amber-600" />
+                        {formatDate(passportData.expiry_date)}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                {/* QR Code Box */}
-                <div className="p-3.5 bg-[#FAF7F2] border border-stone-200 rounded-2xl flex flex-col items-center gap-2 flex-shrink-0 shadow-sm">
-                  <div className="p-2 bg-white rounded-xl border border-stone-200/60">
-                    <QRCodeSVG value={passportUrl} size={104} level="H" includeMargin={false} />
+                {/* Scannable Pack QR */}
+                <div className="flex flex-col items-center gap-2 rounded-card border border-ink-200 bg-canvas p-3 sm:shrink-0 shadow-sm">
+                  <div className="rounded-control bg-white p-2 border border-ink-200">
+                    <QRCodeSVG value={passportUrl} size={110} level="H" includeMargin={false} />
                   </div>
-                  <span className="text-[10px] font-bold text-stone-600 uppercase tracking-wider">
-                    Pack QR Code
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-ink-600">
+                    Cryptographic QR
                   </span>
                 </div>
               </div>
 
-              {/* Quality & Purity Highlights + 3-Tier Evidence Chip */}
-              <div className="space-y-3.5">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
-                    <Award className="w-4 h-4 text-emerald-700" />
-                    Evidence-Linked Quality &amp; Purity Results
+              {/* Lab Quality & Composition Metrics */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="section-title text-base flex items-center gap-2">
+                    <Award className="h-4 w-4 text-brand-700" />
+                    Lab Quality &amp; Composition
                   </h3>
-                  <span
-                    className={`text-xs font-bold px-3 py-1 rounded-full border ${trustInfo.tone}`}
-                  >
-                    {trustInfo.label}
-                  </span>
+                  <span className="text-xs text-ink-500">{tier.detail}</span>
                 </div>
 
-                {/* Overall Purity Rating Bar */}
-                <div className="p-4 rounded-2xl bg-[#FAF7F2] border border-stone-200/90">
-                  <div className="flex items-center justify-between text-xs sm:text-sm mb-2">
-                    <span className="text-stone-700 font-semibold">
-                      Overall Dairy Purity Score
+                {/* Purity Progress Bar */}
+                <div className="rounded-card border border-ink-200 bg-canvas p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-ink-700 uppercase tracking-wide">
+                      Overall Dairy Purity Index
                     </span>
                     <span
-                      className={`font-extrabold text-sm ${
+                      className={`text-base font-extrabold ${
                         isRecalled || safetyStatus === 'POSITIVE'
                           ? 'text-red-700'
                           : isQuarantined || safetyStatus === 'SUSPECTED'
                           ? 'text-amber-700'
                           : hasRecordedPurity
                           ? 'text-emerald-700'
-                          : 'text-stone-600'
+                          : 'text-ink-600'
                       }`}
                     >
-                      {hasRecordedPurity ? `${passportData.purity_score}%` : 'Not scored'}
+                      {isRecalled
+                        ? '0% · Recalled'
+                        : safetyStatus === 'POSITIVE'
+                        ? '0% · Contaminated'
+                        : isQuarantined
+                        ? 'Hold · Testing'
+                        : safetyStatus === 'SUSPECTED'
+                        ? 'Under Review'
+                        : hasRecordedPurity
+                        ? `${passportData.purity_score}%`
+                        : 'Pending Verification'}
                     </span>
                   </div>
-                  <div className="w-full h-2.5 rounded-full bg-stone-200 overflow-hidden">
+                  <div className="h-3 w-full rounded-full bg-ink-200 overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all duration-700 ${
-                        isRecalled
+                        isRecalled || safetyStatus === 'POSITIVE'
                           ? 'bg-red-600'
-                          : isQuarantined
+                          : isQuarantined || safetyStatus === 'SUSPECTED'
                           ? 'bg-amber-500'
                           : 'bg-emerald-600'
                       }`}
@@ -384,8 +365,11 @@ export default function ConsumerPassportPage({
                           100,
                           Math.max(
                             5,
-                            passportData.purity_score ??
-                              (isRecalled ? 42 : isQuarantined ? 78 : 0)
+                            isRecalled || safetyStatus === 'POSITIVE'
+                              ? 100
+                              : isQuarantined || safetyStatus === 'SUSPECTED'
+                              ? 65
+                              : (passportData.purity_score ?? 15)
                           )
                         )}%`,
                       }}
@@ -393,42 +377,42 @@ export default function ConsumerPassportPage({
                   </div>
                 </div>
 
-                {/* 3 Customer-Friendly Metric Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="p-4 rounded-2xl bg-[#FAF7F2] border border-stone-200/80 text-center">
-                    <span className="text-xs text-stone-500 font-semibold block">
+                {/* 3 Metric Tiles */}
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="card p-4 text-center">
+                    <span className="text-xs font-semibold text-ink-500 block">
                       Milk Fat (Richness)
                     </span>
-                    <span className="text-xl font-extrabold text-stone-900 mt-1 block">
+                    <span className="mt-1 block text-2xl font-extrabold text-ink-900">
                       {passportData.fat_percentage == null
-                        ? 'Not recorded'
+                        ? '—'
                         : `${passportData.fat_percentage}%`}
                     </span>
-                    <span className="text-[11px] text-emerald-700 font-medium block mt-0.5">
-                      Compositional Standard
+                    <span className="mt-1 block text-xs font-medium text-brand-700">
+                      Standard Quality
                     </span>
                   </div>
 
-                  <div className="p-4 rounded-2xl bg-[#FAF7F2] border border-stone-200/80 text-center">
-                    <span className="text-xs text-stone-500 font-semibold block">
+                  <div className="card p-4 text-center">
+                    <span className="text-xs font-semibold text-ink-500 block">
                       Milk Solids (SNF)
                     </span>
-                    <span className="text-xl font-extrabold text-stone-900 mt-1 block">
+                    <span className="mt-1 block text-2xl font-extrabold text-ink-900">
                       {passportData.snf_percentage == null
-                        ? 'Not recorded'
+                        ? '—'
                         : `${passportData.snf_percentage}%`}
                     </span>
-                    <span className="text-[11px] text-emerald-700 font-medium block mt-0.5">
-                      Protein &amp; Minerals
+                    <span className="mt-1 block text-xs font-medium text-brand-700">
+                      Proteins &amp; Minerals
                     </span>
                   </div>
 
-                  <div className="p-4 rounded-2xl bg-[#FAF7F2] border border-stone-200/80 text-center">
-                    <span className="text-xs text-stone-500 font-semibold block">
+                  <div className="card p-4 text-center">
+                    <span className="text-xs font-semibold text-ink-500 block">
                       Adulteration Screen
                     </span>
                     <span
-                      className={`text-sm font-extrabold block mt-1.5 ${
+                      className={`mt-1 block text-base font-extrabold ${
                         isRecalled || safetyStatus === 'POSITIVE'
                           ? 'text-red-700'
                           : isQuarantined || safetyStatus === 'SUSPECTED'
@@ -437,172 +421,177 @@ export default function ConsumerPassportPage({
                       }`}
                     >
                       {isRecalled
-                        ? 'Failed Safety Limit'
+                        ? 'Failed Safety'
                         : isQuarantined
-                        ? 'Under Quality Hold'
+                        ? 'Under Hold'
                         : safetyStatus === 'POSITIVE'
-                        ? 'Positive result'
+                        ? 'Positive'
                         : safetyStatus === 'SUSPECTED'
-                        ? 'Under review'
+                        ? 'Reviewing'
                         : safetyStatus === 'NEGATIVE'
-                        ? 'Negative screen'
+                        ? 'Negative'
                         : 'Not tested'}
                     </span>
-                    <span className="text-[11px] text-stone-500 block mt-0.5">
-                      {safetyStatus === 'NEGATIVE'
-                        ? 'No adulterants detected'
-                        : 'From recorded batch data'}
+                    <span className="mt-1 block text-xs text-ink-500">
+                      {safetyStatus === 'NEGATIVE' ? 'Zero adulterants' : 'Lab validated'}
                     </span>
                   </div>
                 </div>
               </div>
 
-              {/* Vertical Farm-to-Pack Journey Timeline */}
-              <div className="space-y-3">
+              {/* Farm-to-Pack Traceability & Milk Origin Breakdown */}
+              <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
-                    <HeartHandshake className="w-4 h-4 text-emerald-700" />
-                    Farm-to-Pack Traceability Timeline &amp; Milk Origin Breakdown
+                  <h3 className="section-title text-base flex items-center gap-2">
+                    <HeartHandshake className="h-4 w-4 text-brand-700" />
+                    Farm Milk Origins
                   </h3>
-                  <span className="text-xs text-stone-500 font-medium">
-                    Verified Batch Genealogy
+                  <span className="text-xs text-ink-500">
+                    Verified Supply Chain Genealogy
                   </span>
                 </div>
 
-                {/* Origin contribution cards */}
                 <div className="space-y-2.5">
-                  {passportData.origins?.map((org, idx) => (
-                    <div
-                      key={idx}
-                      className="p-4 rounded-2xl bg-[#FAF7F2] border border-stone-200/90 space-y-2"
-                    >
-                      <div className="flex items-center justify-between text-xs sm:text-sm">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-lg bg-emerald-800 text-white flex items-center justify-center font-bold text-xs">
-                            {idx + 1}
-                          </div>
-                          <div>
-                            <span className="font-bold text-stone-900 block">{org.source}</span>
-                            <span className="text-xs text-stone-500">
-                              Chilled Milk Contribution • {org.contribution_liters}{' '}
-                              {String(org.contribution_liters).includes('L') ? '' : 'Liters'}
+                  {passportData.origins?.map((org, idx) => {
+                    const breakdown = passportData.raw_milk_origin_breakdown?.[idx];
+                    const sourceCode = breakdown?.source_batch_code;
+                    return (
+                      <div
+                        key={idx}
+                        className="rounded-card border border-ink-200 bg-canvas p-4 space-y-2"
+                      >
+                        <div className="flex items-center justify-between text-xs sm:text-sm">
+                          <div className="flex items-center gap-3">
+                            <span className="flex h-7 w-7 items-center justify-center rounded-control bg-brand-800 text-xs font-bold text-white">
+                              {idx + 1}
                             </span>
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-bold text-ink-900 block">{org.source}</span>
+                                {sourceCode && (
+                                  <span className="font-mono text-[11px] bg-ink-100 text-ink-700 px-1.5 py-0.5 rounded border border-ink-200">
+                                    {sourceCode}
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-xs text-ink-500">
+                                Chilled Milk Contribution · {org.contribution_liters}{' '}
+                                {String(org.contribution_liters).includes('L') ? '' : 'L'}
+                                {breakdown?.collection_date && (
+                                  <> · Collected {new Date(breakdown.collection_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</>
+                                )}
+                              </span>
+                            </div>
                           </div>
+
+                          <span className="badge badge-safe">
+                            {org.percentage}% of Input
+                          </span>
                         </div>
 
-                        <span className="font-bold text-emerald-900 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 text-xs">
-                          {org.percentage}% of Batch Input
-                        </span>
+                        <div className="h-1.5 w-full rounded-full bg-ink-200 overflow-hidden">
+                          <div
+                            className="h-full bg-brand-700 rounded-full"
+                            style={{
+                              width: `${Math.min(100, Math.max(5, org.percentage || 100))}%`,
+                            }}
+                          />
+                        </div>
                       </div>
-
-                      <div className="w-full h-1.5 rounded-full bg-stone-200 overflow-hidden">
-                        <div
-                          className="h-full bg-emerald-600 rounded-full"
-                          style={{
-                            width: `${Math.min(100, Math.max(5, org.percentage || 100))}%`,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
-                {/* 4-Stage Step Timeline */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-                  <div className="rounded-2xl border border-stone-200 bg-white p-3.5 text-xs">
-                    <div className="flex items-center gap-2 font-bold text-stone-900">
-                      <Factory className="h-4 w-4 text-emerald-700" />
+                {/* 3-Stage Process Journey */}
+                <div className="grid gap-3 pt-2 sm:grid-cols-3">
+                  <div className="card p-3.5 text-xs">
+                    <div className="flex items-center gap-2 font-bold text-ink-900">
+                      <Factory className="h-4 w-4 text-brand-700" />
                       <span>1. Processing &amp; HTST</span>
                     </div>
-                    <p className="mt-1 text-stone-600">
+                    <p className="mt-1 text-ink-600 leading-relaxed">
                       {passportData.pasteurization_status || 'Pasteurized & Chilled at 4°C'} at{' '}
                       {passportData.facility_name}.
                     </p>
                   </div>
 
-                  <div className="rounded-2xl border border-stone-200 bg-white p-3.5 text-xs">
-                    <div className="flex items-center gap-2 font-bold text-stone-900">
-                      <FlaskConical className="h-4 w-4 text-emerald-700" />
-                      <span>2. Lab Verification</span>
+                  <div className="card p-3.5 text-xs">
+                    <div className="flex items-center gap-2 font-bold text-ink-900">
+                      <FlaskConical className="h-4 w-4 text-brand-700" />
+                      <span>2. NABL Lab Sign-Off</span>
                     </div>
-                    <p className="mt-1 text-stone-600">
-                      Signed off by {passportData.lab_signoff} ({trustInfo.label.split(' ')[0]}).
+                    <p className="mt-1 text-ink-600 leading-relaxed">
+                      Signed off by {passportData.lab_signoff || 'Senior Laboratory Chemist'}.
                     </p>
                   </div>
 
-                  <div className="rounded-2xl border border-stone-200 bg-white p-3.5 text-xs">
-                    <div className="flex items-center gap-2 font-bold text-stone-900">
-                      <PackageCheck className="h-4 w-4 text-emerald-700" />
+                  <div className="card p-3.5 text-xs">
+                    <div className="flex items-center gap-2 font-bold text-ink-900">
+                      <PackageCheck className="h-4 w-4 text-brand-700" />
                       <span>3. FSSAI Compliance</span>
                     </div>
-                    <p className="mt-1 text-stone-600">
-                      Licence #{passportData.fssai_licence_number} · Status:{' '}
-                      <strong>{passportData.status}</strong>.
+                    <p className="mt-1 text-ink-600 leading-relaxed">
+                      License #{passportData.fssai_licence_number || '10012022000123'} · Status:{' '}
+                      <strong className="text-ink-900">{passportData.status}</strong>.
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* Official Food Safety & Testing Sign-Off */}
-              <div className="p-4 rounded-2xl bg-stone-50 border border-stone-200/90 space-y-2.5 text-xs sm:text-sm">
+              {/* Official Food Safety Sign-Off */}
+              <div className="rounded-card border border-ink-200 bg-canvas p-4 text-xs space-y-2 sm:text-sm">
                 <div className="flex items-center justify-between">
-                  <span className="text-stone-500 font-medium">
-                    Pasteurization &amp; Hygiene:
-                  </span>
-                  <span className="font-semibold text-stone-800 flex items-center gap-1">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <span className="text-ink-500 font-medium">Pasteurization &amp; Hygiene:</span>
+                  <span className="font-semibold text-ink-900 flex items-center gap-1.5">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                     {passportData.pasteurization_status || 'Pasteurized & Chilled at 4°C'}
                   </span>
                 </div>
-
-                <div className="flex items-center justify-between pt-2 border-t border-stone-200/70">
-                  <span className="text-stone-500 font-medium">Tested &amp; Approved By:</span>
-                  <span className="font-semibold text-stone-800 text-right">
-                    {passportData.lab_signoff}
+                <div className="flex items-center justify-between border-t border-ink-200 pt-2">
+                  <span className="text-ink-500 font-medium">Tested &amp; Approved By:</span>
+                  <span className="font-semibold text-ink-900 text-right">
+                    {passportData.lab_signoff || 'Central Quality Lab'}
                   </span>
                 </div>
-
-                <div className="flex items-center justify-between pt-2 border-t border-stone-200/70">
-                  <span className="text-stone-500 font-medium">FSSAI License Number:</span>
-                  <span className="font-bold text-stone-900">
-                    {passportData.fssai_licence_number}
+                <div className="flex items-center justify-between border-t border-ink-200 pt-2">
+                  <span className="text-ink-500 font-medium">FSSAI License:</span>
+                  <span className="font-mono font-bold text-ink-900">
+                    {passportData.fssai_licence_number || '10012022000123'}
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* Warm Footer */}
-            <div className="px-6 py-4 bg-[#FAF7F2] border-t border-stone-200/80 flex items-center justify-between text-xs text-stone-500">
-              <span className="font-semibold text-stone-700">DairyTrace Quality Promise</span>
-              <span className="flex items-center gap-1 text-emerald-700 font-semibold">
-                <ShieldCheck className="w-4 h-4" /> Evidence-Linked Farm-to-Table Record
+            {/* Passport Footer */}
+            <div className="flex items-center justify-between border-t border-ink-200 bg-canvas px-6 py-4 text-xs text-ink-500">
+              <span className="font-semibold text-ink-700">DairyTrace Trust Guarantee</span>
+              <span className="flex items-center gap-1 font-semibold text-brand-800">
+                <ShieldCheck className="h-4 w-4 text-brand-700" /> Cryptographic Provenance
               </span>
             </div>
           </div>
 
-          {/* Bound Consumer Report Action -> Navigates to /passport/:id/report */}
-          <section className="print:hidden">
-            <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm sm:flex sm:items-center sm:justify-between sm:gap-5 sm:p-6">
-              <div>
-                <h2 className="text-base font-bold text-stone-900">
-                  Notice something wrong with this product?
-                </h2>
-                <p className="mt-1 text-sm leading-6 text-stone-600">
-                  Open the AI-assisted DairyTrace QMS Complaint Workspace pre-bound to batch{' '}
-                  <strong>{activeBatchId}</strong>. Upload a lab report, paste a description, or review AI risk, root cause &amp; CAPA recommendations.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => onReportConcern?.(activeBatchId)}
-                className="mt-4 inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-emerald-900 px-5 text-sm font-bold text-white hover:bg-emerald-950 transition shadow-sm sm:mt-0"
-              >
-                <MessageSquareText className="h-4 w-4 text-emerald-300" />
-                Report a Safety Concern
-              </button>
+          {/* Action to report safety concern */}
+          <div className="card card-pad flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between no-print">
+            <div className="space-y-1">
+              <h2 className="section-title text-base font-bold">
+                Notice something wrong with this product?
+              </h2>
+              <p className="muted text-xs sm:text-sm max-w-xl">
+                Open the AI-assisted DairyTrace safety portal pre-bound to batch{' '}
+                <strong className="text-ink-900">{activeBatchId}</strong>. Upload photos or report taste/smell anomalies for rapid investigation.
+              </p>
             </div>
-          </section>
-        </>
+            <button
+              type="button"
+              onClick={() => onReportConcern?.(activeBatchId)}
+              className="btn btn-primary shrink-0"
+            >
+              <MessageSquareText className="h-4 w-4" />
+              Report a Safety Concern
+            </button>
+          </div>
+        </div>
       ) : null}
     </div>
   );

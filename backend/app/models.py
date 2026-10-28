@@ -1,11 +1,27 @@
 """SQLAlchemy ORM models adhering strictly to PROJECT_SPECIFICATION.md Section 3."""
 
 from datetime import datetime, timezone
-from typing import Any
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text
+from typing import Any, Optional
+from decimal import Decimal
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text, UniqueConstraint
+from sqlalchemy.types import TypeDecorator
 from sqlalchemy.orm import relationship
 
 from app.database import Base
+
+
+class PreciseFloat(TypeDecorator):
+    impl = Numeric
+    cache_ok = True
+
+    def __init__(self, precision: int = 14, scale: int = 4):
+        super().__init__(precision=precision, scale=scale)
+
+    def process_bind_param(self, value, dialect):
+        return Decimal(str(value)) if value is not None else None
+
+    def process_result_value(self, value, dialect):
+        return float(value) if value is not None else None
 
 
 def _utcnow() -> datetime:
@@ -41,11 +57,17 @@ class Batch(Base, DictAccessMixin):
     """3.1 `batches` Table — Raw milk collections and finished paneer batches."""
 
     __tablename__ = "batches"
+    __table_args__ = (
+        CheckConstraint("product_type IN ('MILK', 'PANEER')", name="ck_batches_product_type"),
+        CheckConstraint("status IN ('ACTIVE', 'QUARANTINED', 'RECALLED')", name="ck_batches_status"),
+        CheckConstraint("initial_quantity > 0", name="ck_batches_initial_quantity_positive"),
+        CheckConstraint("remaining_quantity >= 0 AND remaining_quantity <= initial_quantity", name="ck_batches_remaining_quantity_range"),
+    )
 
     id = Column(String(64), primary_key=True, index=True)
     product_type = Column(String(20), nullable=False, index=True)  # MILK or PANEER
-    initial_quantity = Column(Float, nullable=False)
-    remaining_quantity = Column(Float, nullable=False)
+    initial_quantity = Column(PreciseFloat(), nullable=False)
+    remaining_quantity = Column(PreciseFloat(), nullable=False)
     facility_name = Column(String(120), nullable=False)
     status = Column(String(20), nullable=False, default="ACTIVE", index=True)  # ACTIVE, QUARANTINED, RECALLED
     production_date = Column(DateTime, nullable=False, default=_utcnow)
@@ -58,34 +80,34 @@ class Batch(Base, DictAccessMixin):
         "BatchLink",
         foreign_keys="BatchLink.child_batch_id",
         back_populates="child_batch",
-        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     child_links = relationship(
         "BatchLink",
         foreign_keys="BatchLink.parent_batch_id",
         back_populates="parent_batch",
-        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     quality_records = relationship(
         "QualityRecord",
         back_populates="batch",
-        cascade="all, delete-orphan",
+        passive_deletes=True,
         order_by="QualityRecord.test_date.desc()",
     )
     distribution_records = relationship(
         "DistributionRecord",
         back_populates="batch",
-        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     recall_events = relationship(
         "RecallEvent",
         back_populates="root_batch",
-        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     inspections = relationship(
         "SecurityInspection",
         back_populates="batch",
-        cascade="all, delete-orphan",
+        passive_deletes=True,
         order_by="SecurityInspection.created_at.desc()",
     )
 
@@ -151,11 +173,17 @@ class BatchLink(Base, DictAccessMixin):
     """3.2 `batch_links` Table — Genealogy edges linking parent milk batches to child paneer batches."""
 
     __tablename__ = "batch_links"
+    __table_args__ = (
+        UniqueConstraint("parent_batch_id", "child_batch_id", name="uq_batch_links_parent_child"),
+        CheckConstraint("parent_batch_id <> child_batch_id", name="ck_batch_links_no_self_link"),
+        CheckConstraint("quantity_used > 0", name="ck_batch_links_quantity_positive"),
+        CheckConstraint("unit IN ('L', 'KG')", name="ck_batch_links_unit"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    parent_batch_id = Column(String(64), ForeignKey("batches.id", ondelete="CASCADE"), nullable=False, index=True)
-    child_batch_id = Column(String(64), ForeignKey("batches.id", ondelete="CASCADE"), nullable=False, index=True)
-    quantity_used = Column(Float, nullable=False)
+    parent_batch_id = Column(String(64), ForeignKey("batches.id", ondelete="RESTRICT"), nullable=False, index=True)
+    child_batch_id = Column(String(64), ForeignKey("batches.id", ondelete="RESTRICT"), nullable=False, index=True)
+    quantity_used = Column(PreciseFloat(), nullable=False)
     unit = Column(String(10), nullable=False, default="L")  # 'L' or 'KG'
     linked_at = Column(DateTime, nullable=False, default=_utcnow)
 
@@ -167,14 +195,21 @@ class QualityRecord(Base, DictAccessMixin):
     """3.3 `quality_records` Table — Evidence-linked lab records with 3-tier trust classification."""
 
     __tablename__ = "quality_records"
+    __table_args__ = (
+        CheckConstraint("fat_percentage BETWEEN 0 AND 100", name="ck_quality_fat_range"),
+        CheckConstraint("snf_percentage BETWEEN 0 AND 100", name="ck_quality_snf_range"),
+        CheckConstraint("acidity BETWEEN 0 AND 10", name="ck_quality_acidity_range"),
+        CheckConstraint("adulterant_test IN ('NEGATIVE', 'POSITIVE', 'SUSPECTED', 'NOT_TESTED')", name="ck_quality_adulterant_test"),
+        CheckConstraint("trust_level IN ('SUPPLIER_ENTERED', 'DOCUMENT_CHECKED', 'VERIFIED')", name="ck_quality_trust_level"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    batch_id = Column(String(64), ForeignKey("batches.id", ondelete="CASCADE"), nullable=False, index=True)
+    batch_id = Column(String(64), ForeignKey("batches.id", ondelete="RESTRICT"), nullable=False, index=True)
     test_date = Column(DateTime, nullable=False, default=_utcnow)
     lab_name = Column(String(120), nullable=False)
-    fat_percentage = Column(Float, nullable=False)
-    snf_percentage = Column(Float, nullable=False)
-    acidity = Column(Float, nullable=False)
+    fat_percentage = Column(PreciseFloat(7, 3), nullable=False)
+    snf_percentage = Column(PreciseFloat(7, 3), nullable=False)
+    acidity = Column(PreciseFloat(7, 4), nullable=False)
     adulterant_test = Column(String(20), nullable=False, default="NEGATIVE")  # NEGATIVE, POSITIVE, SUSPECTED, NOT_TESTED
     contaminant_details = Column(Text, nullable=True)
     trust_level = Column(String(30), nullable=False)  # SUPPLIER_ENTERED, DOCUMENT_CHECKED, VERIFIED
@@ -187,13 +222,17 @@ class DistributionRecord(Base, DictAccessMixin):
     """3.4 `distribution_records` Table — Downstream retail and distributor dispatches."""
 
     __tablename__ = "distribution_records"
+    __table_args__ = (
+        CheckConstraint("quantity_dispatched > 0", name="ck_distribution_quantity_positive"),
+        CheckConstraint("destination_type IN ('RETAILER', 'DISTRIBUTOR')", name="ck_distribution_destination_type"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    batch_id = Column(String(64), ForeignKey("batches.id", ondelete="CASCADE"), nullable=False, index=True)
+    batch_id = Column(String(64), ForeignKey("batches.id", ondelete="RESTRICT"), nullable=False, index=True)
     destination_name = Column(String(120), nullable=False)
     destination_type = Column(String(20), nullable=False, default="RETAILER")  # RETAILER or DISTRIBUTOR
     location = Column(String(120), nullable=False)
-    quantity_dispatched = Column(Float, nullable=False)
+    quantity_dispatched = Column(PreciseFloat(), nullable=False)
     contact_phone = Column(String(20), nullable=False)
     dispatched_at = Column(DateTime, nullable=False, default=_utcnow)
 
@@ -204,34 +243,51 @@ class RecallEvent(Base, DictAccessMixin):
     """3.5 `recall_events` Table — Audit log and containment status for executed recalls."""
 
     __tablename__ = "recall_events"
+    __table_args__ = (
+        CheckConstraint("severity IN ('CRITICAL', 'MAJOR', 'PRECAUTIONARY')", name="ck_recall_severity"),
+        CheckConstraint("status IN ('ACTIVE', 'CONTAINED', 'CLOSED')", name="ck_recall_status"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    root_batch_id = Column(String(64), ForeignKey("batches.id", ondelete="CASCADE"), nullable=False, index=True)
+    root_batch_id = Column(String(64), ForeignKey("batches.id", ondelete="RESTRICT"), nullable=False, index=True)
     reason = Column(Text, nullable=False)
     severity = Column(String(20), nullable=False, default="CRITICAL")  # CRITICAL, MAJOR, PRECAUTIONARY
     initiated_by = Column(String(80), nullable=False)
     status = Column(String(20), nullable=False, default="ACTIVE")  # ACTIVE, CONTAINED, CLOSED
-    affected_batches_json = Column(Text, nullable=False)
-    affected_destinations_json = Column(Text, nullable=False)
+    affected_batches_json = Column(JSON, nullable=False, default=list)
+    affected_destinations_json = Column(JSON, nullable=False, default=list)
     created_at = Column(DateTime, nullable=False, default=_utcnow)
 
     root_batch = relationship("Batch", back_populates="recall_events")
+
+    def to_dict(self) -> dict[str, Any]:
+        import json
+
+        data = super().to_dict()
+        data["affected_batches_json"] = json.dumps(self.affected_batches_json or [])
+        data["affected_destinations_json"] = json.dumps(self.affected_destinations_json or [])
+        return data
 
 
 class SecurityInspection(Base, DictAccessMixin):
     """Manual physical and digital inspection audit record for a batch."""
 
     __tablename__ = "security_inspections"
+    __table_args__ = (
+        CheckConstraint("expected_quantity >= 0 AND actual_quantity >= 0", name="ck_inspection_quantities_nonnegative"),
+        CheckConstraint("temperature_c BETWEEN -50 AND 100", name="ck_inspection_temperature_range"),
+        CheckConstraint("humidity_percent BETWEEN 0 AND 100", name="ck_inspection_humidity_range"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    batch_id = Column(String(64), ForeignKey("batches.id", ondelete="CASCADE"), nullable=False, index=True)
+    batch_id = Column(String(64), ForeignKey("batches.id", ondelete="RESTRICT"), nullable=False, index=True)
     tamper_seal_condition = Column(String(24), nullable=False)
     seal_serial_number = Column(String(100), nullable=True)
     packaging_status = Column(String(24), nullable=False)
-    expected_quantity = Column(Float, nullable=False)
-    actual_quantity = Column(Float, nullable=False)
-    temperature_c = Column(Float, nullable=False)
-    humidity_percent = Column(Float, nullable=False)
+    expected_quantity = Column(PreciseFloat(), nullable=False)
+    actual_quantity = Column(PreciseFloat(), nullable=False)
+    temperature_c = Column(PreciseFloat(7, 2), nullable=False)
+    humidity_percent = Column(PreciseFloat(7, 2), nullable=False)
     cold_chain_compliant = Column(Boolean, nullable=False, default=False)
     verdict = Column(String(32), nullable=False)
     notes = Column(Text, nullable=False, default="")
@@ -253,11 +309,14 @@ class ComplaintRecord(Base, DictAccessMixin):
     """
 
     __tablename__ = "complaints"
-    __table_args__ = {"sqlite_autoincrement": True}  # ids (and so CC- numbers) are never reused after a delete
+    __table_args__ = (
+        CheckConstraint("status IN ('Committed', 'Under review', 'Investigation opened', 'Recall triggered', 'Resolved')", name="ck_complaints_status"),
+        {"sqlite_autoincrement": True},
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     complaint_number = Column(String(50), unique=True, index=True, nullable=False)  # CC-YYYY-NNNN
-    batch_id = Column(String(64), nullable=False, index=True)
+    batch_id = Column(String(64), ForeignKey("batches.id", ondelete="RESTRICT"), nullable=False, index=True)
     customer_name = Column(String(255), default="")
     complaint_source = Column(String(255), default="")
     product_name = Column(String(255), default="")
@@ -276,7 +335,7 @@ class ComplaintRecord(Base, DictAccessMixin):
     priority = Column(String(50), default="")
     risk_assessment = Column(Text, default="")
     root_cause = Column(Text, default="")
-    capa_json = Column(Text, default="[]")
+    capa_json = Column(JSON, nullable=False, default=list)
     # Committed -> Under review -> Recall triggered -> Resolved
     status = Column(String(30), nullable=False, default="Committed", index=True)
     reporter_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
@@ -284,12 +343,7 @@ class ComplaintRecord(Base, DictAccessMixin):
     updated_at = Column(DateTime, nullable=False, default=_utcnow, onupdate=_utcnow)
 
     def to_dict(self) -> dict[str, Any]:
-        import json
-
-        try:
-            capa = json.loads(self.capa_json or "[]")
-        except (TypeError, ValueError):
-            capa = []
+        capa = self.capa_json if isinstance(self.capa_json, list) else []
         return {
             "id": self.id,
             "complaintNumber": self.complaint_number,
@@ -322,6 +376,7 @@ class User(Base, DictAccessMixin):
     """`users` Table — staff accounts. Roles: INSPECTOR, QA_OFFICER. Provisioned only via CLI."""
 
     __tablename__ = "users"
+    __table_args__ = (CheckConstraint("role IN ('INSPECTOR', 'QA_OFFICER')", name="ck_users_role"),)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     email = Column(String(160), unique=True, nullable=False, index=True)

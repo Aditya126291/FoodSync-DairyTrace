@@ -1,7 +1,6 @@
 """Public Consumer Passport Endpoint (`GET /api/public/passport/{batch_id}`)."""
 
 from datetime import timedelta
-import json
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -177,10 +176,7 @@ def get_public_consumer_passport(batch_id: str, db: Session = Depends(get_db)) -
         )
         matched_reason = None
         for ev in active_recall:
-            try:
-                aff = json.loads(ev.affected_batches_json or "[]")
-            except (json.JSONDecodeError, TypeError):
-                aff = []
+            aff = ev.affected_batches_json if isinstance(ev.affected_batches_json, list) else []
             if ev.root_batch_id == batch.id or batch.id in aff:
                 matched_reason = ev.reason
                 break

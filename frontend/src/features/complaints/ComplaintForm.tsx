@@ -287,7 +287,7 @@ export function ComplaintForm({
         </div>
       </header>
 
-      <FormSection title="1. Origin & reporter details">
+      <FormSection title="Reporter details" summary="Source and contact information">
         <Field
           label="Complaint Source"
           field="complaintSource"
@@ -300,7 +300,7 @@ export function ComplaintForm({
         />
       </FormSection>
 
-      <FormSection title="2. Product & batch identification (bound to scanned QR)">
+      <FormSection title="Product and batch" summary="Verified product details from this QR code">
         <Field
           label="Dairy Product Name"
           field="productName"
@@ -337,7 +337,7 @@ export function ComplaintForm({
         />
       </FormSection>
 
-      <FormSection title="3. Facility & material impact">
+      <FormSection title="Facility and impact" summary="Origin site and affected material">
         <Field
           label="Originating Dairy Facility / Plant"
           field="originatingSite"
@@ -351,7 +351,7 @@ export function ComplaintForm({
         />
       </FormSection>
 
-      <FormSection title="4. Complaint details">
+      <FormSection title="What happened?" summary="Describe the issue and when it occurred" open>
         <Field
           label="Complaint Type"
           field="complaintType"
@@ -396,7 +396,7 @@ export function ComplaintForm({
         </label>
       </FormSection>
 
-      <FormSection title="5. Initial assessment, risk classification, root cause & CAPA">
+      <FormSection title="Assessment and actions" summary="Severity, risk review, and AI recommendations">
         <SelectField
           label="Initial Severity"
           field="severity"
@@ -486,11 +486,24 @@ export function ComplaintForm({
   );
 }
 
-function FormSection({ title, children }: { title: string; children: React.ReactNode }) {
+function FormSection({
+  title,
+  summary,
+  children,
+  open = false,
+}: {
+  title: string;
+  summary: string;
+  children: React.ReactNode;
+  open?: boolean;
+}) {
   return (
-    <fieldset className="dt-fieldset">
-      <legend className="dt-legend">{title}</legend>
+    <details className="dt-fieldset" open={open}>
+      <summary className="dt-legend">
+        <span>{title}</span>
+        <span className="dt-section-summary">{summary}</span>
+      </summary>
       <div className="dt-field-grid">{children}</div>
-    </fieldset>
+    </details>
   );
 }

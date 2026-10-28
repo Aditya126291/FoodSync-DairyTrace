@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   Milk,
   Package,
   Plus,
   Link as LinkIcon,
-  X,
   CheckCircle,
   FileBadge,
   Sparkles,
@@ -21,6 +20,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { api } from '../api';
+import { Alert, Badge, Field, Modal, Tabs } from './ui';
 
 export default function BatchCreationModal({
   isOpen,
@@ -32,10 +32,10 @@ export default function BatchCreationModal({
 }) {
   const [activeTab, setActiveTab] = useState('raw_milk'); // 'raw_milk' | 'process_paneer' | 'confirmation'
   const [loading, setLoading] = useState(false);
-  const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [allottedBatch, setAllottedBatch] = useState(null);
   const [copiedUrl, setCopiedUrl] = useState(false);
+  const submittingRef = useRef(false);
 
   // Raw Milk Form State
   const [milkForm, setMilkForm] = useState({
@@ -64,7 +64,7 @@ export default function BatchCreationModal({
     id: `PAN-${Math.floor(203 + Math.random() * 50)}`,
     sku: '',
     serial_number: '',
-    facility_name: 'FoodSync Central Dairy Plant, Pune',
+    facility_name: 'DairyTrace Central Dairy Plant, Pune',
     initial_quantity: 80, // kg
     parent_batch_id: defaultMilkId,
     quantity_used: 400, // L
@@ -76,7 +76,6 @@ export default function BatchCreationModal({
   useEffect(() => {
     if (isOpen) {
       if (activeTab !== 'confirmation') {
-        // Regenerate random candidate IDs on modal reopen
         setMilkForm((prev) => ({
           ...prev,
           id: `MILK-${Math.floor(104 + Math.random() * 50)}`,
@@ -91,15 +90,16 @@ export default function BatchCreationModal({
     } else {
       setAllottedBatch(null);
       setErrorMsg('');
-      setSuccessMsg('');
       setActiveTab('raw_milk');
+      submittingRef.current = false;
     }
   }, [isOpen]);
 
   const handleCreateRawMilk = async (e) => {
     e.preventDefault();
+    if (submittingRef.current || loading) return;
+    submittingRef.current = true;
     setLoading(true);
-    setSuccessMsg('');
     setErrorMsg('');
     try {
       const newBatch = await api.createBatch({
@@ -138,18 +138,20 @@ export default function BatchCreationModal({
 
       setAllottedBatch(fullAllotment);
       setActiveTab('confirmation');
-      if (onBatchCreated) onBatchCreated(fullAllotment);
+      onBatchCreated?.(fullAllotment);
     } catch (err) {
-      setErrorMsg(`${err.message || 'The milk batch could not be completed.'} If it was already saved, search for the batch before retrying.`);
+      setErrorMsg(err.message || 'Could not create raw milk batch.');
     } finally {
       setLoading(false);
+      submittingRef.current = false;
     }
   };
 
   const handleCreatePaneerLink = async (e) => {
     e.preventDefault();
+    if (submittingRef.current || loading) return;
+    submittingRef.current = true;
     setLoading(true);
-    setSuccessMsg('');
     setErrorMsg('');
     try {
       const newBatch = await api.createBatch({
@@ -189,7 +191,7 @@ export default function BatchCreationModal({
 
       await api.addQualityRecord({
         batch_id: paneerForm.id,
-        lab_name: 'FoodSync Central QA Lab, Pune',
+        lab_name: 'DairyTrace Central QA Lab, Pune',
         fat_percentage: 24.0,
         snf_percentage: 28.0,
         acidity: 0.18,
@@ -212,17 +214,18 @@ export default function BatchCreationModal({
         qr_code_url: `/api/batches/${newBatch.id}/qr`,
         linked_sources: inputDesc,
         quality_summary: 'Fat 24.0% · SNF 28.0% · Acidity 0.18% · Negative Adulterant Screen (FSSAI Compliant)',
-        lab_name: 'FoodSync Central QA Lab, Pune',
+        lab_name: 'DairyTrace Central QA Lab, Pune',
         trust_level: 'VERIFIED',
       };
 
       setAllottedBatch(fullAllotment);
       setActiveTab('confirmation');
-      if (onBatchCreated) onBatchCreated(fullAllotment);
+      onBatchCreated?.(fullAllotment);
     } catch (err) {
-      setErrorMsg(`${err.message || 'The paneer batch could not be completed.'} If it was already saved, search for the batch before retrying.`);
+      setErrorMsg(err.message || 'Could not create paneer batch.');
     } finally {
       setLoading(false);
+      submittingRef.current = false;
     }
   };
 
@@ -244,664 +247,375 @@ export default function BatchCreationModal({
     a.remove();
   };
 
-  const handleTestScanPassport = () => {
-    if (!allottedBatch?.id) return;
-    if (onViewPassport) {
-      onViewPassport(allottedBatch.id);
-      onClose();
-    } else {
-      window.open(allottedBatch.passport_url, '_blank');
-    }
-  };
-
-  if (!isOpen) return null;
+  const creationTabs = [
+    { id: 'raw_milk', label: '1. Ingest Raw Milk', icon: Milk },
+    { id: 'process_paneer', label: '2. Process Paneer Vat', icon: Package },
+    ...(allottedBatch ? [{ id: 'confirmation', label: '3. QR Passport Allotted', icon: QrCode }] : []),
+  ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-stone-900/60 backdrop-blur-sm overflow-y-auto">
-      <div className="relative w-full max-w-3xl bg-white border border-stone-200 rounded-3xl shadow-2xl overflow-hidden my-6 max-h-[92vh] flex flex-col">
-        {/* Header */}
-        <div className="bg-[#FAF7F2] border-b border-stone-200 p-5 sm:p-6 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-2xl bg-emerald-800 flex items-center justify-center text-white shadow-sm">
-              {activeTab === 'confirmation' ? (
-                <ShieldCheck className="w-6 h-6 stroke-[2.2]" />
-              ) : (
-                <Plus className="w-6 h-6 stroke-[2.2]" />
-              )}
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-lg sm:text-xl font-bold text-stone-900 tracking-tight">
-                  {activeTab === 'confirmation'
-                    ? 'Batch Allotment & QR Confirmation'
-                    : 'Add Dairy Batch & Designate QR'}
-                </h3>
-                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
-                  QA Officer
-                </span>
-              </div>
-              <p className="text-xs sm:text-sm text-stone-600 mt-0.5">
-                {activeTab === 'confirmation'
-                  ? 'Official allotment certificate and designated QR code for the QA officer.'
-                  : 'Record a raw milk collection or craft a linked paneer batch.'}
-              </p>
-            </div>
-          </div>
+    <Modal
+      open={isOpen}
+      onClose={onClose}
+      title="Create Batch &amp; Allot Cryptographic QR Passport"
+      description="Authorized QA Officer batch provisioning, milk blending, and laboratory quality attachment."
+      icon={Plus}
+      tone="safe"
+      size="xl"
+      dismissable={!loading}
+    >
+      <div className="space-y-5">
+        {errorMsg && (
+          <Alert tone="danger" onClose={() => setErrorMsg('')}>
+            {errorMsg}
+          </Alert>
+        )}
 
+        {/* Tab Navigation */}
+        <div className="flex border-b border-ink-200">
           <button
-            onClick={onClose}
-            className="p-2 rounded-xl text-stone-500 hover:text-stone-900 hover:bg-stone-200/60 transition-colors"
-            aria-label="Close dialog"
+            type="button"
+            onClick={() => setActiveTab('raw_milk')}
+            className={`tab ${activeTab === 'raw_milk' ? 'border-brand-700 text-brand-800' : ''}`}
           >
-            <X className="w-5 h-5" />
+            <Milk className="h-4 w-4" />
+            Ingest Raw Milk Collection
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('process_paneer')}
+            className={`tab ${activeTab === 'process_paneer' ? 'border-brand-700 text-brand-800' : ''}`}
+          >
+            <Package className="h-4 w-4" />
+            Craft &amp; Link Paneer Vat
+          </button>
+          {allottedBatch && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('confirmation')}
+              className={`tab ${activeTab === 'confirmation' ? 'border-brand-700 text-brand-800' : ''}`}
+            >
+              <QrCode className="h-4 w-4" />
+              Passport Allotted ({allottedBatch.id})
+            </button>
+          )}
         </div>
 
-        {/* Tab Switcher (Visible when not in confirmation mode) */}
-        {activeTab !== 'confirmation' && (
-          <div className="flex flex-wrap border-b border-stone-200 bg-stone-100/70 p-1.5 gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => setActiveTab('raw_milk')}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all ${
-                activeTab === 'raw_milk'
-                  ? 'bg-white text-emerald-900 shadow-sm border border-stone-200/80'
-                  : 'text-stone-600 hover:text-stone-900'
-              }`}
-            >
-              <Milk className="w-4 h-4 text-sky-700" />
-              1. Record Milk Collection
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('process_paneer')}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all ${
-                activeTab === 'process_paneer'
-                  ? 'bg-white text-emerald-900 shadow-sm border border-stone-200/80'
-                  : 'text-stone-600 hover:text-stone-900'
-              }`}
-            >
-              <Package className="w-4 h-4 text-amber-700" />
-              2. Craft Paneer Batch
-            </button>
-          </div>
-        )}
+        {/* TAB 1: Ingest Raw Milk */}
+        {activeTab === 'raw_milk' && (
+          <form onSubmit={handleCreateRawMilk} className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Batch ID (Assigned Code)" htmlFor="milk-id">
+                <input
+                  id="milk-id"
+                  required
+                  value={milkForm.id}
+                  onChange={(e) => setMilkForm({ ...milkForm, id: e.target.value.toUpperCase() })}
+                  className="field uppercase font-mono font-bold"
+                />
+              </Field>
 
-        {/* Error message */}
-        {errorMsg && (
-          <div role="alert" className="mx-6 mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-sm font-semibold text-rose-800">
-            {errorMsg}
-          </div>
-        )}
+              <Field label="Collection Facility / Chilling Center" htmlFor="milk-facility">
+                <input
+                  id="milk-facility"
+                  required
+                  value={milkForm.facility_name}
+                  onChange={(e) => setMilkForm({ ...milkForm, facility_name: e.target.value })}
+                  className="field"
+                />
+              </Field>
 
-        {/* Modal Scrollable Body */}
-        <div className="flex-1 overflow-y-auto">
-          {/* VIEW: Allotment & QR Confirmation Page (Visible Exclusively to Uploader / Inspector) */}
-          {activeTab === 'confirmation' && allottedBatch && (
-            <div className="p-6 sm:p-8 space-y-6">
-              {/* Uploader-Only Privacy & Allotment Notice */}
-              <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-start gap-3.5 text-emerald-950">
-                <div className="w-8 h-8 rounded-xl bg-emerald-800 text-white flex items-center justify-center shrink-0 mt-0.5">
-                  <Lock className="w-4 h-4" />
-                </div>
-                <div className="text-xs sm:text-sm space-y-1">
-                  <div className="flex items-center gap-2 font-bold uppercase tracking-wider text-emerald-900 text-[11px]">
-                    <span>Inspector &amp; Uploader Confirmation View</span>
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-950 text-[10px]">
-                      Restricted
-                    </span>
-                  </div>
-                  <p className="text-emerald-800 leading-relaxed text-xs">
-                    This confirmation docket and allotment receipt is generated strictly for the inspector/uploader.
-                    Regular consumers scanning the physical package QR code bypass this screen and are routed directly to the public passport view.
-                  </p>
-                </div>
-              </div>
+              <Field label="Volume Ingested (Liters)" htmlFor="milk-quantity">
+                <input
+                  id="milk-quantity"
+                  type="number"
+                  required
+                  min="1"
+                  value={milkForm.initial_quantity}
+                  onChange={(e) => setMilkForm({ ...milkForm, initial_quantity: e.target.value })}
+                  className="field"
+                />
+              </Field>
 
-              {/* Main Allotment Dossier Card */}
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center rounded-3xl border border-stone-200/90 bg-[#FFFDF9] p-6 shadow-sm">
-                {/* Left: Detailed Batch Allotment Credentials (7 cols) */}
-                <div className="md:col-span-7 space-y-4">
-                  <div className="space-y-1">
-                    <span className="text-[11px] font-extrabold uppercase tracking-widest text-emerald-800">
-                      Official Batch Allotment
-                    </span>
-                    <h4 className="font-display text-2xl sm:text-3xl font-extrabold text-stone-950 tracking-tight flex items-center gap-2">
-                      {allottedBatch.id}
-                      <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300">
-                        {allottedBatch.status || 'ACTIVE'}
-                      </span>
-                    </h4>
-                    <p className="text-xs font-semibold text-stone-500">
-                      {allottedBatch.product_type === 'MILK' ? 'Fresh Raw Milk Collection' : 'Crafted Fresh Malai Paneer'}
-                    </p>
-                  </div>
+              <Field label="Assigned Laboratory" htmlFor="milk-lab">
+                <input
+                  id="milk-lab"
+                  required
+                  value={milkForm.lab_name}
+                  onChange={(e) => setMilkForm({ ...milkForm, lab_name: e.target.value })}
+                  className="field"
+                />
+              </Field>
 
-                  {/* Metadata Grid */}
-                  <div className="grid grid-cols-2 gap-3 text-xs">
-                    <div className="p-3 rounded-xl bg-white border border-stone-200">
-                      <span className="text-stone-400 block text-[10px] uppercase font-bold">Allotted Volume</span>
-                      <strong className="text-stone-900 text-sm mt-0.5 block">
-                        {allottedBatch.initial_quantity}{' '}
-                        {allottedBatch.product_type === 'MILK' ? 'Liters' : 'kg'}
-                      </strong>
-                    </div>
+              <Field label="Milk Fat %" htmlFor="milk-fat">
+                <input
+                  id="milk-fat"
+                  type="number"
+                  step="0.1"
+                  required
+                  value={milkForm.fat_percentage}
+                  onChange={(e) => setMilkForm({ ...milkForm, fat_percentage: e.target.value })}
+                  className="field"
+                />
+              </Field>
 
-                    <div className="p-3 rounded-xl bg-white border border-stone-200">
-                      <span className="text-stone-400 block text-[10px] uppercase font-bold">Facility / Plant</span>
-                      <strong className="text-stone-900 text-xs sm:text-sm mt-0.5 block truncate" title={allottedBatch.facility_name}>
-                        {allottedBatch.facility_name}
-                      </strong>
-                    </div>
+              <Field label="Milk SNF %" htmlFor="milk-snf">
+                <input
+                  id="milk-snf"
+                  type="number"
+                  step="0.1"
+                  required
+                  value={milkForm.snf_percentage}
+                  onChange={(e) => setMilkForm({ ...milkForm, snf_percentage: e.target.value })}
+                  className="field"
+                />
+              </Field>
 
-                    <div className="p-3 rounded-xl bg-white border border-stone-200">
-                      <span className="text-stone-400 block text-[10px] uppercase font-bold">Production Date</span>
-                      <strong className="text-stone-900 text-xs mt-0.5 block">
-                        {new Date(allottedBatch.production_date || Date.now()).toLocaleDateString()}
-                      </strong>
-                    </div>
+              <Field label="Acidity % (Lactic Acid)" htmlFor="milk-acidity">
+                <input
+                  id="milk-acidity"
+                  type="number"
+                  step="0.01"
+                  required
+                  value={milkForm.acidity}
+                  onChange={(e) => setMilkForm({ ...milkForm, acidity: e.target.value })}
+                  className="field"
+                />
+              </Field>
 
-                    <div className="p-3 rounded-xl bg-white border border-stone-200">
-                      <span className="text-stone-400 block text-[10px] uppercase font-bold">Best Before</span>
-                      <strong className="text-stone-900 text-xs mt-0.5 block">
-                        {new Date(allottedBatch.expiry_date || Date.now() + 86400000 * 2).toLocaleDateString()}
-                      </strong>
-                    </div>
-                  </div>
-
-                  {/* Upstream Provenance Links if present */}
-                  {allottedBatch.linked_sources && (
-                    <div className="p-3 rounded-xl bg-emerald-50/70 border border-emerald-200 text-xs">
-                      <span className="text-emerald-900 font-bold block mb-0.5">Upstream Milk Provenance:</span>
-                      <span className="text-emerald-800 font-semibold">{allottedBatch.linked_sources}</span>
-                    </div>
-                  )}
-
-                  {/* Quality Verification Status */}
-                  <div className="p-3 rounded-xl bg-[#FAF7F2] border border-stone-200/90 text-xs space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-stone-600 font-semibold">Laboratory Verification:</span>
-                      <span className="text-emerald-800 font-bold bg-emerald-100 px-2 py-0.5 rounded text-[10px]">
-                        {allottedBatch.trust_level || 'Lab Chemist Verified'}
-                      </span>
-                    </div>
-                    <p className="text-stone-500 text-[11px]">
-                      {allottedBatch.quality_summary || 'Certified negative adulterant screen; compositional metrics compliant.'}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Right: Designated Scannable QR Code (5 cols) */}
-                <div className="md:col-span-5 flex flex-col items-center justify-center p-5 rounded-2xl bg-white border border-stone-200 shadow-sm space-y-3">
-                  <div className="text-center space-y-0.5">
-                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-800">
-                      Designated Scannable QR
-                    </span>
-                    <p className="text-xs text-stone-500 font-medium">Ready for pack labeling &amp; scanner audit</p>
-                  </div>
-
-                  {/* QR Box */}
-                  <div className="p-3 bg-[#FAF7F2] rounded-2xl border border-stone-200 shadow-inner">
-                    <QRCodeSVG
-                      value={allottedBatch.passport_url || `${typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173'}/passport/${allottedBatch.id}`}
-                      size={152}
-                      level="H"
-                      includeMargin={false}
-                    />
-                  </div>
-
-                  {/* Passport URL + Copy Button */}
-                  <div className="w-full flex items-center justify-between gap-1 p-2 rounded-xl bg-[#FAF7F2] border border-stone-200 text-[11px]">
-                    <span className="font-mono text-stone-600 truncate max-w-[170px]">
-                      {allottedBatch.passport_url}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleCopyPassportUrl}
-                      className="px-2 py-1 rounded-lg bg-white border border-stone-300 hover:bg-stone-100 text-stone-700 font-bold inline-flex items-center gap-1 shrink-0"
-                    >
-                      {copiedUrl ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-                      {copiedUrl ? 'Copied' : 'Copy'}
-                    </button>
-                  </div>
-
-                  {/* Action Buttons for Inspector */}
-                  <div className="w-full grid grid-cols-2 gap-2 pt-1">
-                    <button
-                      type="button"
-                      onClick={handleTestScanPassport}
-                      className="inline-flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl bg-emerald-900 hover:bg-emerald-950 text-white text-xs font-bold transition shadow-sm"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                      Test Scan
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleDownloadQr}
-                      className="inline-flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl border border-stone-300 bg-white hover:bg-stone-50 text-stone-800 text-xs font-bold transition"
-                    >
-                      <Download className="w-3.5 h-3.5 text-stone-600" />
-                      Download QR
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Bottom Actions for Inspector */}
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-stone-200">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAllottedBatch(null);
-                    setActiveTab('raw_milk');
-                  }}
-                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-stone-300 bg-white hover:bg-stone-50 text-stone-700 text-xs font-bold transition"
+              <Field label="Adulterant Screen" htmlFor="milk-adulterant">
+                <select
+                  id="milk-adulterant"
+                  value={milkForm.adulterant_test}
+                  onChange={(e) => setMilkForm({ ...milkForm, adulterant_test: e.target.value })}
+                  className="field font-semibold"
                 >
-                  + Create Another Batch
-                </button>
-
-                <div className="w-full sm:w-auto flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (onOpenBatchAudit && allottedBatch?.id) {
-                        onOpenBatchAudit(allottedBatch.id);
-                      }
-                      onClose();
-                    }}
-                    className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold shadow-sm transition"
-                  >
-                    Open in Batch Audit Hub <ArrowRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
+                  <option value="NEGATIVE">NEGATIVE (No Adulterants Found)</option>
+                  <option value="SUSPECTED">SUSPECTED (Flag for Secondary Test)</option>
+                </select>
+              </Field>
             </div>
-          )}
 
-          {/* Form 1: Record Fresh Milk Collection */}
-          {activeTab === 'raw_milk' && (
-            <form onSubmit={handleCreateRawMilk} className="p-6 space-y-5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-stone-700 uppercase tracking-wide mb-1.5">
-                    Milk Batch Code
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={milkForm.id}
-                    onChange={(e) => setMilkForm({ ...milkForm, id: e.target.value })}
-                    className="w-full bg-[#FAF7F2] border border-stone-300 rounded-xl px-3.5 py-2 text-sm font-bold text-stone-900 focus:border-emerald-600 focus:bg-white focus:outline-none"
-                  />
-                </div>
+            <div className="flex justify-end gap-2.5 border-t border-ink-100 pt-4">
+              <button type="button" onClick={onClose} disabled={loading} className="btn btn-secondary">
+                Cancel
+              </button>
+              <button type="submit" disabled={loading} className="btn btn-primary">
+                {loading ? 'Creating & Allotting QR…' : 'Create Raw Milk Batch'}
+              </button>
+            </div>
+          </form>
+        )}
 
-                <div>
-                  <label className="block text-xs font-bold text-stone-700 uppercase tracking-wide mb-1.5">
-                    Milk Volume Collected (Liters)
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    min="10"
-                    value={milkForm.initial_quantity}
-                    onChange={(e) => setMilkForm({ ...milkForm, initial_quantity: e.target.value })}
-                    className="w-full bg-[#FAF7F2] border border-stone-300 rounded-xl px-3.5 py-2 text-sm font-bold text-stone-900 focus:border-emerald-600 focus:bg-white focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-stone-600 mb-1">
-                    Product SKU <span className="font-normal text-stone-400">(optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    maxLength="80"
-                    value={milkForm.sku}
-                    onChange={(e) => setMilkForm({ ...milkForm, sku: e.target.value })}
-                    className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm"
-                    placeholder="e.g. DT-MILK-1L"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-stone-600 mb-1">
-                    Serial number <span className="font-normal text-stone-400">(optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    maxLength="120"
-                    value={milkForm.serial_number}
-                    onChange={(e) => setMilkForm({ ...milkForm, serial_number: e.target.value })}
-                    className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm"
-                    placeholder="Unique pack or lot serial"
-                  />
-                </div>
-
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold text-stone-700 uppercase tracking-wide mb-1.5">
-                    Village Collection Centre / Chilling Hub
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={milkForm.facility_name}
-                    onChange={(e) => setMilkForm({ ...milkForm, facility_name: e.target.value })}
-                    className="w-full bg-[#FAF7F2] border border-stone-300 rounded-xl px-3.5 py-2 text-sm text-stone-900 focus:border-emerald-600 focus:bg-white focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              {/* Quality Test Details */}
-              <div className="p-4 rounded-2xl bg-[#FAF7F2] border border-stone-200/90 space-y-3.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wide text-emerald-800 flex items-center gap-1.5">
-                    <FileBadge className="w-4 h-4 text-emerald-700" /> Milk Quality &amp; Purity Test
-                  </span>
-                  <span className="text-[11px] font-semibold bg-emerald-50 text-emerald-800 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                    FSSAI Dairy Standard
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-stone-600 mb-1">
-                      Milk Fat %
-                    </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={milkForm.fat_percentage}
-                      onChange={(e) => setMilkForm({ ...milkForm, fat_percentage: e.target.value })}
-                      className="w-full bg-white border border-stone-300 rounded-xl px-3 py-1.5 text-sm font-bold text-stone-900"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-stone-600 mb-1">
-                      Milk Solids (SNF) %
-                    </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={milkForm.snf_percentage}
-                      onChange={(e) => setMilkForm({ ...milkForm, snf_percentage: e.target.value })}
-                      className="w-full bg-white border border-stone-300 rounded-xl px-3 py-1.5 text-sm font-bold text-stone-900"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-stone-600 mb-1">
-                      Acidity %
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={milkForm.acidity}
-                      onChange={(e) => setMilkForm({ ...milkForm, acidity: e.target.value })}
-                      className="w-full bg-white border border-stone-300 rounded-xl px-3 py-1.5 text-sm font-bold text-stone-900"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                  <div>
-                    <label className="block text-xs font-semibold text-stone-600 mb-1">
-                      Testing Lab Name
-                    </label>
-                    <input
-                      type="text"
-                      value={milkForm.lab_name}
-                      onChange={(e) => setMilkForm({ ...milkForm, lab_name: e.target.value })}
-                      className="w-full bg-white border border-stone-300 rounded-xl px-3 py-1.5 text-xs sm:text-sm text-stone-900"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-stone-600 mb-1">
-                      Verification Level
-                    </label>
-                    <select
-                      value={milkForm.trust_level}
-                      onChange={(e) => setMilkForm({ ...milkForm, trust_level: e.target.value })}
-                      className="w-full bg-white border border-stone-300 rounded-xl px-3 py-1.5 text-xs sm:text-sm font-semibold text-stone-900"
-                    >
-                      <option value="VERIFIED">Lab Chemist Verified (Highest Trust)</option>
-                      <option value="DOCUMENT_CHECKED">Lab Report Attached</option>
-                      <option value="SUPPLIER_ENTERED">Recorded at Collection Centre</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2.5 pt-2">
+        {/* TAB 2: Process Paneer Vat */}
+        {activeTab === 'process_paneer' && (
+          milkBatches.length === 0 ? (
+            <div className="space-y-4 py-4 text-center">
+              <Alert variant="warning" title="No Active Raw Milk in Inventory">
+                Paneer processing requires at least one active raw milk batch in inventory as a source. Ingest a raw milk batch first using the Ingest Raw Milk tab.
+              </Alert>
+              <div className="pt-2 flex justify-center gap-3">
                 <button
                   type="button"
-                  onClick={onClose}
-                  className="px-4 py-2.5 rounded-xl bg-stone-100 text-stone-700 text-xs font-bold hover:bg-stone-200 transition-colors"
+                  onClick={() => setActiveTab('raw_milk')}
+                  className="btn btn-primary"
                 >
+                  Ingest Raw Milk Now
+                </button>
+                <button type="button" onClick={onClose} className="btn btn-secondary">
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-5 py-2.5 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold shadow-sm flex items-center gap-1.5 transition-colors disabled:opacity-60"
-                >
-                  <Plus className="w-4 h-4" />
-                  {loading ? 'Registering Batch & QR…' : 'Save Milk & Generate QR'}
-                </button>
               </div>
-            </form>
-          )}
-
-          {/* Form 2: Craft Paneer Batch */}
-          {activeTab === 'process_paneer' && (
-            <form onSubmit={handleCreatePaneerLink} className="p-6 space-y-5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-stone-700 uppercase tracking-wide mb-1.5">
-                    New Paneer Batch Code
-                  </label>
+            </div>
+          ) : (
+            <form onSubmit={handleCreatePaneerLink} className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Finished Paneer Batch ID" htmlFor="paneer-id">
                   <input
-                    type="text"
+                    id="paneer-id"
                     required
                     value={paneerForm.id}
-                    onChange={(e) => setPaneerForm({ ...paneerForm, id: e.target.value })}
-                    className="w-full bg-[#FAF7F2] border border-stone-300 rounded-xl px-3.5 py-2 text-sm font-bold text-stone-900 focus:border-emerald-600 focus:bg-white focus:outline-none"
+                    onChange={(e) => setPaneerForm({ ...paneerForm, id: e.target.value.toUpperCase() })}
+                    className="field uppercase font-mono font-bold"
                   />
-                </div>
+                </Field>
 
-                <div>
-                  <label className="block text-xs font-bold text-stone-700 uppercase tracking-wide mb-1.5">
-                    Paneer Weight Produced (kg)
-                  </label>
+                <Field label="Manufacturing Facility" htmlFor="paneer-facility">
                   <input
+                    id="paneer-facility"
+                    required
+                    value={paneerForm.facility_name}
+                    onChange={(e) => setPaneerForm({ ...paneerForm, facility_name: e.target.value })}
+                    className="field"
+                  />
+                </Field>
+
+                <Field label="Paneer Yield (kg)" htmlFor="paneer-yield">
+                  <input
+                    id="paneer-yield"
                     type="number"
                     required
                     min="1"
                     value={paneerForm.initial_quantity}
                     onChange={(e) => setPaneerForm({ ...paneerForm, initial_quantity: e.target.value })}
-                    className="w-full bg-[#FAF7F2] border border-stone-300 rounded-xl px-3.5 py-2 text-sm font-bold text-stone-900 focus:border-emerald-600 focus:bg-white focus:outline-none"
+                    className="field"
                   />
-                </div>
+                </Field>
 
-                <div>
-                  <label className="block text-xs font-semibold text-stone-600 mb-1">
-                    Product SKU <span className="font-normal text-stone-400">(optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    maxLength="80"
-                    value={paneerForm.sku}
-                    onChange={(e) => setPaneerForm({ ...paneerForm, sku: e.target.value })}
-                    className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm"
-                    placeholder="e.g. DT-PAN-200G"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-stone-600 mb-1">
-                    Serial number <span className="font-normal text-stone-400">(optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    maxLength="120"
-                    value={paneerForm.serial_number}
-                    onChange={(e) => setPaneerForm({ ...paneerForm, serial_number: e.target.value })}
-                    className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm"
-                    placeholder="Unique pack or lot serial"
-                  />
-                </div>
-
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold text-stone-700 uppercase tracking-wide mb-1.5">
-                    Dairy Processing Plant
-                  </label>
-                  <input
-                    type="text"
+                <Field label="Primary Source Milk Batch" htmlFor="paneer-parent">
+                  <select
+                    id="paneer-parent"
                     required
-                    value={paneerForm.facility_name}
-                    onChange={(e) => setPaneerForm({ ...paneerForm, facility_name: e.target.value })}
-                    className="w-full bg-[#FAF7F2] border border-stone-300 rounded-xl px-3.5 py-2 text-sm text-stone-900 focus:border-emerald-600 focus:bg-white focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              {/* Source Milk Selection */}
-              <div className="p-4 rounded-2xl bg-[#FAF7F2] border border-stone-200/90 space-y-3.5">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <span className="text-xs font-bold uppercase tracking-wide text-stone-800 flex items-center gap-1.5">
-                    <LinkIcon className="w-4 h-4 text-emerald-700" /> Select Source Milk Used
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setPaneerForm({ ...paneerForm, has_co_input: !paneerForm.has_co_input })
-                    }
-                    className="text-xs font-bold text-emerald-800 hover:text-emerald-900 flex items-center gap-1 bg-white border border-stone-300 px-3 py-1 rounded-lg shadow-sm"
+                    value={paneerForm.parent_batch_id}
+                    onChange={(e) => setPaneerForm({ ...paneerForm, parent_batch_id: e.target.value })}
+                    className="field font-mono font-semibold"
                   >
-                    <Plus className="w-3.5 h-3.5" />
-                    {paneerForm.has_co_input
-                      ? 'Remove Second Milk Batch'
-                      : 'Blend a Second Milk Batch'}
-                  </button>
-                </div>
+                    {milkBatches.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.id} · {m.facility_name} ({m.remaining_quantity}L remaining)
+                      </option>
+                    ))}
+                  </select>
+                </Field>
 
-                {/* Primary Milk Input */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-stone-600 mb-1">
-                      Primary Milk Batch
-                    </label>
-                    <select
-                      value={paneerForm.parent_batch_id}
-                      onChange={(e) =>
-                        setPaneerForm({ ...paneerForm, parent_batch_id: e.target.value })
-                      }
-                      className="w-full bg-white border border-stone-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-bold text-stone-900"
-                    >
-                      {milkBatches.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.id} — {m.facility_name.split('(')[0]} ({m.remaining_quantity} L avail)
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                <Field label="Primary Milk Volume Used (Liters)" htmlFor="paneer-qty-used">
+                  <input
+                    id="paneer-qty-used"
+                    type="number"
+                    required
+                    min="1"
+                    value={paneerForm.quantity_used}
+                    onChange={(e) => setPaneerForm({ ...paneerForm, quantity_used: e.target.value })}
+                    className="field"
+                  />
+                </Field>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-stone-600 mb-1">
-                      Milk Used (Liters)
-                    </label>
+                <div className="flex items-center pt-6">
+                  <label className="flex items-center gap-2 text-xs font-bold text-ink-800 cursor-pointer">
                     <input
-                      type="number"
-                      required
-                      min="1"
-                      value={paneerForm.quantity_used}
-                      onChange={(e) =>
-                        setPaneerForm({ ...paneerForm, quantity_used: e.target.value })
-                      }
-                      className="w-full bg-white border border-stone-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-bold text-stone-900"
+                      type="checkbox"
+                      checked={paneerForm.has_co_input}
+                      onChange={(e) => setPaneerForm({ ...paneerForm, has_co_input: e.target.checked })}
+                      className="h-4 w-4 rounded accent-brand-800"
                     />
-                  </div>
+                    <span>Co-blend secondary milk batch into vat</span>
+                  </label>
                 </div>
 
-                {/* Optional Second Blended Milk Batch */}
                 {paneerForm.has_co_input && (
-                  <div className="pt-3 border-t border-stone-200">
-                    <span className="text-xs text-amber-800 font-bold block mb-2">
-                      Second Milk Batch (Blended in Same Vat)
-                    </span>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-semibold text-stone-600 mb-1">
-                          Second Milk Batch
-                        </label>
-                        <select
-                          value={paneerForm.co_parent_batch_id}
-                          onChange={(e) =>
-                            setPaneerForm({ ...paneerForm, co_parent_batch_id: e.target.value })
-                          }
-                          className="w-full bg-white border border-amber-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-bold text-stone-900"
-                        >
-                          {milkBatches
-                            .filter((m) => m.id !== paneerForm.parent_batch_id)
-                            .map((m) => (
-                              <option key={m.id} value={m.id}>
-                                {m.id} — {m.facility_name.split('(')[0]} ({m.remaining_quantity} L avail)
-                              </option>
-                            ))}
-                        </select>
-                      </div>
+                  <>
+                    <Field label="Co-Input Milk Batch" htmlFor="co-parent">
+                      <select
+                        id="co-parent"
+                        value={paneerForm.co_parent_batch_id}
+                        onChange={(e) => setPaneerForm({ ...paneerForm, co_parent_batch_id: e.target.value })}
+                        className="field font-mono font-semibold"
+                      >
+                        {milkBatches.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.id} · {m.facility_name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
 
-                      <div>
-                        <label className="block text-xs font-semibold text-stone-600 mb-1">
-                          Second Batch Milk Used (Liters)
-                        </label>
-                        <input
-                          type="number"
-                          min="1"
-                          value={paneerForm.co_quantity_used}
-                          onChange={(e) =>
-                            setPaneerForm({ ...paneerForm, co_quantity_used: e.target.value })
-                          }
-                          className="w-full bg-white border border-amber-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-bold text-stone-900"
-                        />
-                      </div>
-                    </div>
-                  </div>
+                    <Field label="Co-Input Volume (Liters)" htmlFor="co-qty">
+                      <input
+                        id="co-qty"
+                        type="number"
+                        min="1"
+                        value={paneerForm.co_quantity_used}
+                        onChange={(e) => setPaneerForm({ ...paneerForm, co_quantity_used: e.target.value })}
+                        className="field"
+                      />
+                    </Field>
+                  </>
                 )}
-
-                {/* Yield Summary Preview */}
-                <div className="mt-2 p-3 rounded-xl bg-emerald-50/80 border border-emerald-200 flex items-center justify-between text-xs sm:text-sm">
-                  <span className="text-emerald-900 font-medium">Batch Recipe Summary:</span>
-                  <span className="text-emerald-950 font-bold">
-                    {(() => {
-                      const totalMilk =
-                        Number(paneerForm.quantity_used || 0) +
-                        (paneerForm.has_co_input ? Number(paneerForm.co_quantity_used || 0) : 0);
-                      const paneerKg = Number(paneerForm.initial_quantity || 1);
-                      return `${totalMilk} Liters Milk → ${paneerKg} kg Fresh Paneer`;
-                    })()}
-                  </span>
-                </div>
               </div>
 
-              <div className="flex justify-end gap-2.5 pt-2">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="px-4 py-2.5 rounded-xl bg-stone-100 text-stone-700 text-xs font-bold hover:bg-stone-200 transition-colors"
-                >
+              <div className="flex justify-end gap-2.5 border-t border-ink-100 pt-4">
+                <button type="button" onClick={onClose} disabled={loading} className="btn btn-secondary">
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-5 py-2.5 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold shadow-sm flex items-center gap-1.5 transition-colors disabled:opacity-60"
-                >
-                  <LinkIcon className="w-4 h-4" />
-                  {loading ? 'Creating Batch & QR…' : 'Create Paneer & Allot QR'}
+                <button type="submit" disabled={loading} className="btn btn-primary">
+                  {loading ? 'Processing & Linking Batch…' : 'Craft & Link Paneer Batch'}
                 </button>
               </div>
             </form>
-          )}
-        </div>
+          )
+        )}
+
+        {/* TAB 3: Confirmation & Passport QR */}
+        {activeTab === 'confirmation' && allottedBatch && (
+          <div className="card p-6 border-brand-200 bg-brand-50/20 text-center space-y-5">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-800 text-white shadow-sm">
+              <CheckCircle className="h-8 w-8" />
+            </div>
+
+            <div>
+              <span className="badge badge-safe">Allotted to Registry</span>
+              <h3 className="section-title text-2xl mt-2 font-mono font-bold text-ink-900">
+                {allottedBatch.id}
+              </h3>
+              <p className="muted text-xs sm:text-sm mt-1 max-w-md mx-auto">
+                Cryptographic passport and scannable pack QR generated. Linked to facility and verified laboratory quality standards.
+              </p>
+            </div>
+
+            {/* QR Code Card */}
+            <div className="mx-auto inline-flex flex-col items-center rounded-card border border-ink-200 bg-white p-4 shadow-sm">
+              <QRCodeSVG value={allottedBatch.passport_url} size={140} level="H" includeMargin={false} />
+              <span className="mt-2 font-mono text-xs font-bold text-brand-900">
+                {allottedBatch.id}
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={handleCopyPassportUrl}
+                className="btn btn-secondary btn-sm"
+              >
+                {copiedUrl ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                {copiedUrl ? 'Copied Link' : 'Copy Passport Link'}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDownloadQr}
+                className="btn btn-secondary btn-sm"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Download QR Code
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onViewPassport?.(allottedBatch.id);
+                }}
+                className="btn btn-primary btn-sm"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                View Customer Passport
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenBatchAudit?.(allottedBatch.id);
+                }}
+                className="btn btn-secondary btn-sm"
+              >
+                <ArrowRight className="h-3.5 w-3.5" />
+                Open in Audit Console
+              </button>
+            </div>
+          </div>
+        )}
       </div>
-    </div>
+    </Modal>
   );
 }

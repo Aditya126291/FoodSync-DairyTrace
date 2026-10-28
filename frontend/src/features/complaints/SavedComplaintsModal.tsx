@@ -58,6 +58,15 @@ export function SavedComplaintsModal({
     }
   }, [isOpen, filterBatchOnly, batchId]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   const handleDelete = async (id: number) => {
     if (!isQA) return;
     setErrorMsg('');

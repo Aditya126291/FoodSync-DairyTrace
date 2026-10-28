@@ -1,19 +1,28 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   ShieldAlert,
   ShieldCheck,
   Phone,
   FileText,
-  X,
   RefreshCw,
   CheckCircle,
   Package,
   Milk,
   Store,
   Lock,
+  AlertTriangle,
 } from 'lucide-react';
 import { api } from '../api';
 import { useAuth } from '../auth/AuthContext';
+import { Alert, Badge, Modal } from './ui';
+
+const STANDARD_RECALL_REASONS = [
+  'Elevated Aflatoxin M1 detected (> 0.50 µg/kg statutory limit)',
+  'Microbial pathogen screen positive (Salmonella / E. coli)',
+  'Chemical adulterant screen positive (Urea / Detergent / Neutralizer)',
+  'Severe cold-chain failure (Temperature > 10°C exceeding 4 hours)',
+  'Foreign physical matter detected in packaging',
+];
 
 export default function RecallModal({
   isOpen,
@@ -26,15 +35,15 @@ export default function RecallModal({
 }) {
   const { user, isQA } = useAuth();
   const [targetBatchId, setTargetBatchId] = useState(initialBatchId);
-  const [reason, setReason] = useState(
-    'Elevated Aflatoxin M1 detected (0.78 ug/kg > FSSAI safe limit 0.50 ug/kg)'
-  );
+  const [reason, setReason] = useState(initialReason || STANDARD_RECALL_REASONS[0]);
   const [severity, setSeverity] = useState('CRITICAL');
   const [confirmBatchInput, setConfirmBatchInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isExecuting, setIsExecuting] = useState(false);
   const [blastRadius, setBlastRadius] = useState(null);
   const [executedEvent, setExecutedEvent] = useState(null);
   const [actionError, setActionError] = useState('');
+  const requestInFlight = useRef(false);
 
   const handleSimulate = async (batchIdToUse, reasonOverride) => {
     const bId = batchIdToUse || targetBatchId;
@@ -49,7 +58,7 @@ export default function RecallModal({
       setBlastRadius(res);
     } catch (err) {
       setActionError(
-        err.message || 'The safety impact preview could not be loaded. Try again.'
+        err.message || 'Safety impact preview could not be loaded.'
       );
     } finally {
       setLoading(false);
@@ -58,14 +67,17 @@ export default function RecallModal({
 
   const handleExecute = async () => {
     if (!isQA) {
-      setActionError('Only a QA Officer can execute an official food recall.');
+      setActionError('Only an authorized QA Officer can execute an official food recall.');
       return;
     }
     if (confirmBatchInput.trim().toUpperCase() !== targetBatchId.toUpperCase()) {
-      setActionError(`Type "${targetBatchId}" in the confirmation box before issuing the recall.`);
+      setActionError(`Type "${targetBatchId}" in the confirmation box before issuing recall.`);
       return;
     }
-    setLoading(true);
+    if (requestInFlight.current || isExecuting) return;
+
+    requestInFlight.current = true;
+    setIsExecuting(true);
     setActionError('');
     try {
       const res = await api.executeRecall({
@@ -74,28 +86,24 @@ export default function RecallModal({
         severity,
       });
       setExecutedEvent(res.recall_event);
-      if (onRecallExecuted) {
-        onRecallExecuted(res);
-      }
+      onRecallExecuted?.(res);
     } catch (err) {
-      setActionError(err.message || 'The safety action could not be saved. Try again.');
+      setActionError(err.message || 'Could not execute the safety recall.');
     } finally {
-      setLoading(false);
+      setIsExecuting(false);
+      requestInFlight.current = false;
     }
   };
 
   useEffect(() => {
     if (isOpen && initialBatchId) {
-      const cleanId = initialBatchId;
-      setTargetBatchId(cleanId);
+      setTargetBatchId(initialBatchId);
       setConfirmBatchInput('');
-      const startingReason =
-        initialReason ||
-        'Elevated Aflatoxin M1 detected (0.78 ug/kg > FSSAI safe limit 0.50 ug/kg)';
+      const startingReason = initialReason || STANDARD_RECALL_REASONS[0];
       setReason(startingReason);
       setExecutedEvent(null);
       setActionError('');
-      handleSimulate(cleanId, startingReason);
+      handleSimulate(initialBatchId, startingReason);
     }
   }, [initialBatchId, initialReason, isOpen]);
 
@@ -111,467 +119,289 @@ export default function RecallModal({
     );
   }, [batches, blastRadius]);
 
-  if (!isOpen) return null;
-
   const isConfirmMatch =
     confirmBatchInput.trim().toUpperCase() === targetBatchId.toUpperCase();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/50 backdrop-blur-sm overflow-y-auto">
-      <div className="relative w-full max-w-4xl bg-white border border-stone-200 rounded-2xl shadow-2xl overflow-hidden my-8">
-        {/* Clean Header */}
-        <div className="bg-red-50/80 border-b border-red-200/80 p-5 flex items-center justify-between">
-          <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-2xl bg-red-600 flex items-center justify-center text-white shadow-sm">
-              <ShieldAlert className="w-6 h-6 stroke-[2.2]" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-lg font-bold text-stone-900 tracking-tight">
-                  Smart Recall Blast-Radius Simulation &amp; Execution
-                </h3>
-                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 border border-red-200">
-                  BFS Graph Engine · FSSAI Schedule I
-                </span>
-              </div>
-              <p className="text-xs sm:text-sm text-stone-600">
-                Instantly trace affected paneer packs, co-input milk vats, and retail stores while protecting safe, unrelated dairy batches.
-              </p>
-            </div>
-          </div>
+    <Modal
+      open={isOpen}
+      onClose={onClose}
+      title="Smart Recall Blast-Radius Simulation &amp; Execution"
+      description="Graph-based impact tracing to withdraw compromised packs and protect safe dairy batches."
+      icon={ShieldAlert}
+      tone="danger"
+      size="xl"
+      dismissable={!isExecuting}
+    >
+      <div className="space-y-6">
+        {actionError && (
+          <Alert tone="danger" onClose={() => setActionError('')}>
+            {actionError}
+          </Alert>
+        )}
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 rounded-xl text-stone-500 hover:text-stone-900 hover:bg-white/80 transition-colors"
-            aria-label="Close recall modal"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Modal Body */}
-        <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
-          {actionError && (
-            <p
-              role="alert"
-              className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800"
-            >
-              {actionError}
-            </p>
-          )}
-
-          {/* Batch Selection & Reason Form */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 rounded-2xl bg-[#FAF7F2] border border-stone-200/90">
-            <div>
-              <label className="block text-xs font-bold text-stone-700 uppercase tracking-wide mb-1.5">
-                Batch to Check / Flag
-              </label>
-              <select
-                value={targetBatchId}
-                onChange={(e) => {
-                  const nextId = e.target.value;
-                  setTargetBatchId(nextId);
-                  setConfirmBatchInput('');
-                  setExecutedEvent(null);
-                  handleSimulate(nextId);
-                }}
-                className="w-full bg-white border border-stone-300 rounded-xl px-3 py-2 text-sm font-bold text-stone-900 focus:outline-none focus:border-red-500"
-              >
-                {batches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.id} ({b.product_type === 'MILK' ? 'Milk' : 'Paneer'} —{' '}
-                    {b.facility_name.split(' ')[0]})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-stone-700 uppercase tracking-wide mb-1.5">
-                Safety Alert Classification
-              </label>
-              <select
-                value={severity}
-                onChange={(e) => setSeverity(e.target.value)}
-                className="w-full bg-white border border-stone-300 rounded-xl px-3 py-2 text-sm font-semibold text-stone-900 focus:outline-none focus:border-red-500"
-              >
-                <option value="CRITICAL">Class I: Urgent Health Risk</option>
-                <option value="MAJOR">Class II: Quality Non-Compliance</option>
-                <option value="PRECAUTIONARY">Class III: Precautionary Hold</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-stone-700 uppercase tracking-wide mb-1.5">
-                Verified Actor (From JWT Token)
-              </label>
-              <div className="w-full bg-stone-100 border border-stone-200 rounded-xl px-3 py-2 text-xs font-bold text-stone-700 flex items-center gap-1.5">
-                <Lock className="w-3.5 h-3.5 text-emerald-800 shrink-0" />
-                <span className="truncate">
-                  {user ? `${user.full_name} (${user.role})` : 'Authenticated Staff'}
-                </span>
-              </div>
-            </div>
-
-            <div className="md:col-span-3">
-              <label className="block text-xs font-bold text-stone-700 uppercase tracking-wide mb-1.5">
-                Reason for Safety Check or Recall
-              </label>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <input
-                  type="text"
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  className="flex-1 bg-white border border-stone-300 rounded-xl px-3.5 py-2 text-sm text-stone-900 focus:outline-none focus:border-red-500"
-                />
+        {/* Target Batch & Reason Configuration */}
+        <div className="card p-4 sm:p-5 border-red-200 bg-red-50/20 space-y-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-1">
+              <span className="eyebrow text-red-700">Root Compromised Batch</span>
+              <div className="flex items-center gap-2">
+                <select
+                  value={targetBatchId}
+                  onChange={(e) => {
+                    const nextId = e.target.value;
+                    setTargetBatchId(nextId);
+                    setConfirmBatchInput('');
+                    handleSimulate(nextId);
+                  }}
+                  className="field max-w-xs font-mono font-bold text-sm"
+                  disabled={loading || isExecuting || Boolean(executedEvent)}
+                >
+                  {batches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.id} · {b.product_type === 'MILK' ? 'Raw Milk' : 'Paneer'} ({b.facility_name})
+                    </option>
+                  ))}
+                </select>
                 <button
                   type="button"
                   onClick={() => handleSimulate(targetBatchId)}
-                  disabled={loading}
-                  className="px-4 py-2 bg-white hover:bg-stone-100 border border-stone-300 rounded-xl text-xs font-bold text-stone-800 flex items-center justify-center gap-1.5 transition-colors shadow-sm"
+                  disabled={loading || isExecuting}
+                  className="btn btn-secondary btn-sm"
+                  title="Re-run simulation"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-                  Update Preview
-                </button>
-              </div>
-
-              {/* Quick Reason Presets */}
-              <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
-                <span className="text-xs text-stone-500 font-medium">Common Reasons:</span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setReason(
-                      'Elevated Aflatoxin M1 detected (0.78 ug/kg > FSSAI safe limit 0.50 ug/kg)'
-                    )
-                  }
-                  className="text-xs px-2.5 py-1 rounded-lg bg-white hover:bg-stone-100 text-stone-700 border border-stone-200 font-medium"
-                >
-                  Aflatoxin M1 Above Limit
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setReason('Antibiotic residue detected above permissible dairy limit')
-                  }
-                  className="text-xs px-2.5 py-1 rounded-lg bg-white hover:bg-stone-100 text-stone-700 border border-stone-200 font-medium"
-                >
-                  Antibiotic Residue
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setReason('Cold-chain temperature excursion during transit')
-                  }
-                  className="text-xs px-2.5 py-1 rounded-lg bg-white hover:bg-stone-100 text-stone-700 border border-stone-200 font-medium"
-                >
-                  Cold-Chain Issue
+                  <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
                 </button>
               </div>
             </div>
+
+            <div className="space-y-1">
+              <span className="eyebrow text-red-700">Severity Level</span>
+              <select
+                value={severity}
+                onChange={(e) => setSeverity(e.target.value)}
+                disabled={isExecuting || Boolean(executedEvent)}
+                className="field text-sm font-bold min-h-[44px]"
+              >
+                <option value="CRITICAL">CRITICAL (Class I — Immediate Public Health Hazard)</option>
+                <option value="HIGH">HIGH (Class II — Potential Health Risk)</option>
+                <option value="MEDIUM">MEDIUM (Class III — Quality Deviation)</option>
+              </select>
+            </div>
           </div>
 
-          {/* Impact Preview */}
-          {blastRadius && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-bold text-stone-900 flex items-center gap-2">
-                  <ShieldAlert className="w-4 h-4 text-red-600" />
-                  Recall Impact Summary for{' '}
-                  <span className="text-red-700">{blastRadius.root_batch}</span>
-                </h4>
-                <span className="text-xs text-stone-500 font-medium">
-                  Non-destructive BFS simulation preview
+          <div>
+            <label className="label text-xs">Regulatory Reason &amp; Laboratory Findings</label>
+            <div className="space-y-2">
+              <select
+                onChange={(e) => {
+                  if (e.target.value) setReason(e.target.value);
+                }}
+                disabled={isExecuting || Boolean(executedEvent)}
+                className="field text-xs text-ink-700"
+                value={STANDARD_RECALL_REASONS.includes(reason) ? reason : ''}
+              >
+                <option value="">-- Choose standard regulatory reason or enter below --</option>
+                {STANDARD_RECALL_REASONS.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+
+              <textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                disabled={isExecuting || Boolean(executedEvent)}
+                className="field text-xs"
+                placeholder="Describe lab test results, adulterant thresholds, or customer illness reports…"
+                rows={2}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Blast Radius Simulation Results */}
+        {loading ? (
+          <Spinner label="Tracing supply-chain graph &amp; calculating blast radius…" />
+        ) : blastRadius ? (
+          <div className="space-y-4">
+            {/* Impact Metric Tiles */}
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="card p-4 border-red-200 bg-red-50/50">
+                <span className="text-xs font-semibold text-red-800 uppercase block">
+                  Downstream Batches At Risk
+                </span>
+                <p className="mt-1 text-2xl font-bold text-red-950 font-mono">
+                  {blastRadius.affected_product_batches?.length || 0}
+                </p>
+                <span className="text-[11px] text-red-700 block mt-0.5">
+                  Paneer lots made from this milk
                 </span>
               </div>
 
-              {/* 4 Summary Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                <div className="p-4 rounded-xl bg-red-50/70 border border-red-200 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-red-100 text-red-700 flex items-center justify-center flex-shrink-0">
-                    <Package className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <span className="text-[11px] text-red-800 font-bold block uppercase">
-                      Paneer to Recall
-                    </span>
-                    <span className="text-lg font-extrabold text-stone-900">
-                      {blastRadius.affected_product_batches.length}{' '}
-                      {blastRadius.affected_product_batches.length === 1 ? 'Batch' : 'Batches'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="p-4 rounded-xl bg-amber-50/70 border border-amber-200 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center flex-shrink-0">
-                    <Milk className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <span className="text-[11px] text-amber-900 font-bold block uppercase">
-                      Milk Co-Inputs to Hold
-                    </span>
-                    <span className="text-lg font-extrabold text-stone-900">
-                      {blastRadius.co_input_batches_for_review.length}{' '}
-                      {blastRadius.co_input_batches_for_review.length === 1 ? 'Batch' : 'Batches'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="p-4 rounded-xl bg-sky-50/70 border border-sky-200 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-sky-100 text-sky-800 flex items-center justify-center flex-shrink-0">
-                    <Store className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <span className="text-[11px] text-sky-900 font-bold block uppercase">
-                      Stores to Alert
-                    </span>
-                    <span className="text-lg font-extrabold text-stone-900">
-                      {blastRadius.compromised_retail_destinations.length}{' '}
-                      {blastRadius.compromised_retail_destinations.length === 1
-                        ? 'Store'
-                        : 'Stores'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="p-4 rounded-xl bg-emerald-50/70 border border-emerald-200 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center flex-shrink-0">
-                    <ShieldCheck className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <span className="text-[11px] text-emerald-900 font-bold block uppercase">
-                      Safe &amp; Untouched
-                    </span>
-                    <span className="text-lg font-extrabold text-emerald-900">
-                      {safePaneerBatches.length} Paneer{' '}
-                      {safePaneerBatches.length === 1 ? 'Batch' : 'Batches'}
-                    </span>
-                  </div>
-                </div>
+              <div className="card p-4 border-red-200 bg-red-50/50">
+                <span className="text-xs font-semibold text-red-800 uppercase block">
+                  Stores To Notify
+                </span>
+                <p className="mt-1 text-2xl font-bold text-red-950 font-mono">
+                  {(blastRadius.compromised_retail_destinations || blastRadius.affected_retailers || []).length}
+                </p>
+                <span className="text-[11px] text-red-700 block mt-0.5">
+                  Retail points holding stock
+                </span>
               </div>
 
-              {/* Detailed Lists */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Left Column: Affected Products & Co-Inputs */}
-                <div className="space-y-3">
-                  <div className="p-4 rounded-2xl bg-[#FAF7F2] border border-stone-200/90">
-                    <span className="text-xs font-bold text-red-700 uppercase tracking-wide flex items-center gap-1.5 mb-2.5">
-                      <Package className="w-4 h-4" />
-                      Finished Products to Withdraw ({blastRadius.affected_product_batches.length})
-                    </span>
-                    <div className="space-y-2">
-                      {blastRadius.affected_product_batches.map((batchId) => (
-                        <div
-                          key={batchId}
-                          className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-red-200 text-xs"
-                        >
-                          <div>
-                            <span className="font-bold text-stone-900">{batchId}</span>
-                            <span className="text-stone-500 ml-2">
-                              Made using {targetBatchId}
-                            </span>
-                          </div>
-                          <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 font-bold text-[11px]">
-                            Recall Pack
-                          </span>
-                        </div>
-                      ))}
-                      {blastRadius.affected_product_batches.length === 0 && (
-                        <p className="text-xs text-stone-500 italic">
-                          No downstream paneer batches were made from this batch.
-                        </p>
-                      )}
-                    </div>
-                  </div>
+              <div className="card p-4 border-emerald-200 bg-emerald-50/50">
+                <span className="text-xs font-semibold text-emerald-800 uppercase block">
+                  Protected Safe Batches
+                </span>
+                <p className="mt-1 text-2xl font-bold text-emerald-950 font-mono">
+                  {safePaneerBatches.length}
+                </p>
+                <span className="text-[11px] text-emerald-700 block mt-0.5">
+                  Zero contamination risk
+                </span>
+              </div>
+            </div>
 
-                  <div className="p-4 rounded-2xl bg-[#FAF7F2] border border-stone-200/90">
-                    <span className="text-xs font-bold text-amber-800 uppercase tracking-wide flex items-center gap-1.5 mb-2.5">
-                      <Milk className="w-4 h-4" />
-                      Blended Milk Batches to Hold for Re-Testing
-                    </span>
-                    <div className="space-y-2">
-                      {blastRadius.co_input_batches_for_review.map((coId) => (
-                        <div
-                          key={coId}
-                          className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-amber-200 text-xs"
-                        >
-                          <div>
-                            <span className="font-bold text-stone-900">{coId}</span>
-                            <span className="text-stone-500 ml-2">
-                              Mixed in the same vat as {targetBatchId}
-                            </span>
-                          </div>
-                          <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold text-[11px]">
-                            Place on Hold
-                          </span>
-                        </div>
-                      ))}
-                      {blastRadius.co_input_batches_for_review.length === 0 && (
-                        <p className="text-xs text-stone-500 italic">
-                          No other milk batches were mixed with this batch.
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right Column: Retail Stores to Notify */}
-                <div className="p-4 rounded-2xl bg-[#FAF7F2] border border-stone-200/90 flex flex-col">
-                  <div className="flex items-center justify-between mb-2.5">
-                    <span className="text-xs font-bold text-stone-800 uppercase tracking-wide flex items-center gap-1.5">
-                      <Store className="w-4 h-4 text-emerald-700" />
-                      Retail Stores Holding Affected Stock
-                    </span>
-                    <span className="text-xs font-bold text-stone-700 bg-white px-2.5 py-0.5 rounded-md border border-stone-200">
-                      Total:{' '}
-                      {blastRadius.total_retail_units_at_risk ??
-                        blastRadius.total_retail_units ??
-                        (blastRadius.compromised_retail_destinations || []).reduce(
-                          (acc, d) => acc + (Number(d.quantity_dispatched) || 0),
-                          0
-                        )}{' '}
-                      kg
-                    </span>
-                  </div>
-
-                  <div className="space-y-2.5 overflow-y-auto max-h-56 pr-1">
-                    {blastRadius.compromised_retail_destinations.map((dest, idx) => (
+            {/* Affected Retailers List */}
+            {(blastRadius.compromised_retail_destinations || blastRadius.affected_retailers || []).length > 0 && (
+              <div className="card p-4 space-y-2">
+                <h4 className="text-xs font-bold text-ink-900 uppercase tracking-wider flex items-center gap-1.5">
+                  <Store className="h-4 w-4 text-red-600" />
+                  Retail Outlets Holding Recalled Batches:
+                </h4>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {(blastRadius.compromised_retail_destinations || blastRadius.affected_retailers || []).map((r, idx) => {
+                    const storeName = r.destination_name || r.retailer_name;
+                    const phone = r.contact_phone || r.phone;
+                    return (
                       <div
-                        key={dest.id || idx}
-                        className="p-3 rounded-xl bg-white border border-stone-200/90 text-xs space-y-2"
+                        key={idx}
+                        className="rounded-control border border-red-200 bg-red-50/30 p-2.5 text-xs flex items-center justify-between"
                       >
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <span className="font-bold text-stone-900 block">
-                              {dest.destination_name}
-                            </span>
-                            <span className="text-stone-500">{dest.location}</span>
-                          </div>
-                          <span className="text-red-800 font-bold bg-red-50 px-2.5 py-0.5 rounded-lg border border-red-200 text-xs">
-                            {dest.quantity_dispatched} kg
+                        <div>
+                          <strong className="block text-ink-900">{storeName}</strong>
+                          <span className="text-ink-500">
+                            {r.location} · Batch {r.batch_id}
+                            {r.quantity_dispatched ? ` (${r.quantity_dispatched} kg)` : ''}
                           </span>
                         </div>
-
-                        <div className="pt-2 border-t border-stone-100 flex items-center justify-between">
-                          <span className="text-stone-600">
-                            Batch: <strong className="text-stone-900">{dest.batch_id}</strong>
-                          </span>
+                        {phone && (
                           <a
-                            href={`tel:${dest.contact_phone}`}
-                            className="flex items-center gap-1 text-red-700 hover:text-red-800 font-bold"
+                            href={`tel:${phone}`}
+                            className="btn btn-secondary btn-sm text-[11px]"
                           >
-                            <Phone className="w-3.5 h-3.5" />
-                            {dest.contact_phone}
+                            <Phone className="h-3 w-3" />
+                            Call
                           </a>
-                        </div>
+                        )}
                       </div>
-                    ))}
-                    {blastRadius.compromised_retail_destinations.length === 0 && (
-                      <p className="text-xs text-stone-500 italic">
-                        No retail store deliveries affected.
-                      </p>
-                    )}
-                  </div>
+                    );
+                  })}
                 </div>
               </div>
-            </div>
-          )}
-
-          {/* Confirmation input for QA Officer */}
-          {isQA && !executedEvent && (
-            <div className="p-4 rounded-2xl border border-red-200 bg-red-50/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <label
-                  htmlFor="confirm-recall-batch"
-                  className="text-xs font-bold text-red-900 block"
-                >
-                  Confirm Batch Code to Authorize Statutory Recall
-                </label>
-                <p className="text-[11px] text-red-800/80">
-                  Type <strong>{targetBatchId}</strong> to confirm irreversible recall &amp; quarantine status updates.
-                </p>
-              </div>
-              <input
-                id="confirm-recall-batch"
-                type="text"
-                value={confirmBatchInput}
-                onChange={(e) => setConfirmBatchInput(e.target.value)}
-                placeholder={targetBatchId}
-                className="w-full sm:w-44 rounded-xl border border-red-300 bg-white px-3 py-1.5 text-sm font-bold uppercase text-stone-900 focus:border-red-600 focus:outline-none"
-              />
-            </div>
-          )}
-
-          {/* Confirmation Banner when Executed */}
-          {executedEvent && (
-            <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-start gap-3">
-              <CheckCircle className="w-5 h-5 text-emerald-700 flex-shrink-0 mt-0.5" />
-              <div>
-                <h5 className="text-sm font-bold text-emerald-900">
-                  Safety Recall Confirmed &amp; Updated Across All Records
-                </h5>
-                <p className="text-xs text-emerald-800 mt-0.5 leading-relaxed">
-                  Affected batches are now marked <strong>Recalled</strong>, blended milk batches are placed <strong>On Hold</strong>, and the Customer QR Passport now displays an immediate safety notice.
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Footer Actions */}
-        <div className="p-4 bg-[#FAF7F2] border-t border-stone-200 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="text-xs text-stone-600 font-medium">
-            {executedEvent ? (
-              <span className="text-emerald-800 font-bold flex items-center gap-1.5">
-                <CheckCircle className="w-4 h-4 text-emerald-700" />
-                Official Recall Notice #{executedEvent.id} Generated
-              </span>
-            ) : isQA ? (
-              <span>
-                Unaffected control batches (such as PAN-303) remain safe and active.
-              </span>
-            ) : (
-              <span className="text-amber-900 font-semibold">
-                Inspector Mode: Blast-radius preview only. QA Officer clearance is required to execute recalls or export FSSAI notices.
-              </span>
             )}
           </div>
+        ) : null}
 
-          {isQA ? (
-            <div className="flex items-center gap-2.5 w-full sm:w-auto">
-              {executedEvent && (
+        {/* Execution & Confirmation Step */}
+        {!executedEvent ? (
+          <div className="card p-5 border-red-300 bg-red-50/20 space-y-4">
+            <div>
+              <h4 className="text-sm font-bold text-red-950 flex items-center gap-2">
+                <ShieldAlert className="h-4 w-4 text-red-600" />
+                Statutory Execution Confirmation
+              </h4>
+              <p className="muted text-xs mt-1">
+                This action immediately marks the batch as <strong className="text-red-700">RECALLED</strong>, locks its public passport, flags downstream retailers, and generates an official FSSAI Schedule I notice.
+              </p>
+            </div>
+
+            {isQA ? (
+              <div className="space-y-3">
+                <div>
+                  <label className="label text-xs">
+                    To confirm, please type <strong className="font-mono text-red-700">{targetBatchId}</strong>:
+                  </label>
+                  <input
+                    type="text"
+                    value={confirmBatchInput}
+                    onChange={(e) => setConfirmBatchInput(e.target.value)}
+                    placeholder={`Type ${targetBatchId} here`}
+                    className="field uppercase text-sm font-mono max-w-sm"
+                    disabled={isExecuting}
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    disabled={isExecuting}
+                    className="btn btn-secondary"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleExecute}
+                    disabled={!isConfirmMatch || isExecuting}
+                    className="btn btn-danger"
+                  >
+                    {isExecuting ? 'Executing Recall…' : 'Execute Official Recall'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="alert alert-warn">
+                <Lock className="h-4 w-4" />
+                <div className="text-xs">
+                  <strong>Inspector View Only:</strong> You can simulate blast-radiuses and identify stores to call. Only a plant <strong>QA Officer</strong> can sign off on statutory recall execution.
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="card p-6 border-emerald-300 bg-emerald-50/30 text-center space-y-4">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-800">
+              <CheckCircle className="h-6 w-6" />
+            </div>
+            <div>
+              <h3 className="section-title text-emerald-950">
+                Official Recall #{executedEvent.id} Issued Successfully
+              </h3>
+              <p className="muted text-xs mt-1">
+                Root batch <strong className="font-mono">{executedEvent.root_batch_id}</strong> is now locked. Public consumers scanning this QR code are instructed to return packaging immediately.
+              </p>
+            </div>
+
+            <div className="flex justify-center gap-3 pt-2">
+              {onOpenFssaiNotice && (
                 <button
                   type="button"
-                  onClick={() => onOpenFssaiNotice(executedEvent.id)}
-                  className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-white hover:bg-stone-100 text-stone-800 border border-stone-300 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-sm"
+                  onClick={() => {
+                    onClose();
+                    onOpenFssaiNotice(executedEvent.id);
+                  }}
+                  className="btn btn-primary"
                 >
-                  <FileText className="w-4 h-4 text-amber-700" />
-                  View FSSAI Recall Report
+                  <FileText className="h-4 w-4" />
+                  Export FSSAI Schedule I Notice
                 </button>
               )}
-
               <button
                 type="button"
-                onClick={handleExecute}
-                disabled={loading || !blastRadius || !isConfirmMatch}
-                className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-1.5 transition-colors"
+                onClick={onClose}
+                className="btn btn-secondary"
               >
-                <ShieldAlert className="w-4 h-4 stroke-[2.2]" />
-                {executedEvent ? 'Re-Issue Recall' : 'Confirm & Issue Recall'}
+                Done
               </button>
             </div>
-          ) : (
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl border border-stone-300 bg-white text-xs font-bold text-stone-700 hover:bg-stone-100"
-            >
-              Close Simulation
-            </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
-    </div>
+    </Modal>
   );
 }

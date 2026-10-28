@@ -11,6 +11,9 @@ import LoginPage from './pages/LoginPage';
 import InspectorHub from './pages/InspectorHub';
 import ConsumerPassportPage from './pages/ConsumerPassportPage';
 import ComplaintWorkspace from './features/complaints/ComplaintWorkspace';
+import PublicHeader from './components/PublicHeader';
+import PublicFooter from './components/PublicFooter';
+import { Toast } from './components/ui';
 import { api } from './api';
 
 function routeFromPath() {
@@ -199,24 +202,8 @@ function AppShell() {
     route.view === 'staff-report';
 
   return (
-    <div className="min-h-screen bg-[#faf8f2] text-stone-800">
-      {toast && (
-        <div
-          role="status"
-          className={`fixed bottom-4 right-4 z-[80] flex max-w-sm items-center gap-2.5 rounded-2xl border px-4 py-3 text-sm font-semibold shadow-xl ${
-            toast.type === 'error'
-              ? 'border-rose-200 bg-white text-rose-800'
-              : 'border-emerald-200 bg-white text-stone-800'
-          }`}
-        >
-          {toast.type === 'error' ? (
-            <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
-          ) : (
-            <CheckCircle className="h-4 w-4 shrink-0 text-emerald-700" />
-          )}
-          {toast.message}
-        </div>
-      )}
+    <div className="min-h-screen bg-canvas text-ink-800">
+      <Toast toast={toast} onDismiss={() => setToast(null)} />
 
       {route.view === 'home' && (
         <LandingPage
@@ -239,63 +226,70 @@ function AppShell() {
       )}
 
       {route.view === 'passport' && (
-        <>
-          <header className="border-b border-stone-200 bg-white px-4 py-3 sm:px-7">
-            <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={() => navigate('/')}
-                className="flex items-center gap-3 text-left"
-              >
-                <span className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-900 text-white">
-                  <Milk className="h-4 w-4" />
-                </span>
-                <span>
-                  <strong className="block font-display text-lg text-stone-900">
-                    DairyTrace
-                  </strong>
-                  <span className="text-[11px] text-stone-500">
-                    Public Product Passport
-                  </span>
-                </span>
-              </button>
-
-              {isAuthenticated && isStaff && (
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      navigate(`/staff/batch/${encodeURIComponent(route.batchId)}`)
-                    }
-                    className="inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-emerald-900 px-3 text-xs font-bold text-white shadow-sm hover:bg-emerald-950"
-                  >
-                    <LayoutDashboard className="h-3.5 w-3.5" />
-                    Open in Staff Workspace
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </button>
-                </div>
+        <div className="flex min-h-screen flex-col justify-between">
+          <div>
+            <PublicHeader subtitle="Public Product Passport" onHome={() => navigate('/')}>
+              {isAuthenticated && isStaff ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    navigate(`/staff/batch/${encodeURIComponent(route.batchId)}`)
+                  }
+                  className="btn btn-primary btn-sm"
+                >
+                  <LayoutDashboard className="h-3.5 w-3.5" />
+                  Staff Workspace
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPostLoginPath(`/staff/batch/${encodeURIComponent(route.batchId)}`);
+                    navigate('/login');
+                  }}
+                  className="btn btn-secondary btn-sm"
+                >
+                  Staff Portal
+                </button>
               )}
-            </div>
-          </header>
+            </PublicHeader>
 
-          <ConsumerPassportPage
-            initialBatchId={route.batchId}
-            onBackToScanner={() => navigate('/')}
-            onReportConcern={(batchId) =>
-              navigate(`/passport/${encodeURIComponent(batchId || route.batchId)}/report`)
-            }
-          />
-        </>
+            <ConsumerPassportPage
+              initialBatchId={route.batchId}
+              onBackToScanner={() => navigate('/')}
+              onReportConcern={(batchId) =>
+                navigate(`/passport/${encodeURIComponent(batchId || route.batchId)}/report`)
+              }
+            />
+          </div>
+          <PublicFooter />
+        </div>
       )}
 
       {route.view === 'consumer-report' && (
-        <ComplaintWorkspace
-          batchId={route.batchId}
-          mode="consumer"
-          onBack={() =>
-            navigate(`/passport/${encodeURIComponent(route.batchId)}`)
-          }
-        />
+        <div className="flex min-h-screen flex-col justify-between">
+          <div>
+            <PublicHeader subtitle="Public Quality & Safety Feedback" onHome={() => navigate('/')}>
+              <button
+                type="button"
+                onClick={() => navigate(`/passport/${encodeURIComponent(route.batchId)}`)}
+                className="btn btn-secondary btn-sm"
+              >
+                Back to Passport
+              </button>
+            </PublicHeader>
+
+            <ComplaintWorkspace
+              batchId={route.batchId}
+              mode="consumer"
+              onBack={() =>
+                navigate(`/passport/${encodeURIComponent(route.batchId)}`)
+              }
+            />
+          </div>
+          <PublicFooter />
+        </div>
       )}
 
       {isStaffView && (
@@ -327,7 +321,7 @@ function AppShell() {
                 onRefreshBatches={loadStaffData}
                 onNotify={showToast}
               />
-              <footer className="border-t border-stone-200 bg-white px-4 py-5 text-center text-xs text-stone-500">
+              <footer className="border-t border-ink-200 bg-canvas px-4 py-5 text-center text-xs text-ink-500">
                 DairyTrace · Verified Staff Traceability &amp; Audit Workspace ({user?.email})
               </footer>
             </>

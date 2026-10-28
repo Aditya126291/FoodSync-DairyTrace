@@ -24,6 +24,8 @@ Once running:
 - **Web Application:** `http://127.0.0.1:5173`
 - **Interactive Swagger API Docs:** `http://127.0.0.1:8000/docs`
 
+Production PostgreSQL setup and the one-time SQLite cutover procedure are documented in [`backend/DATABASE_DEPLOYMENT.md`](backend/DATABASE_DEPLOYMENT.md).
+
 ---
 
 ## 🔐 Server-Verified Staff Authentication & RBAC

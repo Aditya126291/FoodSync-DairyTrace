@@ -41,6 +41,8 @@ def seed_tech4food_scenario(db_session: Optional[Session] = None) -> dict[str, A
     If `db_session` is None, creates and closes its own session against the configured engine.
     """
     owns_session = False
+    if os.getenv("APP_ENV", "development").strip().lower() == "production":
+        raise RuntimeError("Demo scenario seeding is disabled in production.")
     if db_session is None:
         init_db()
         db_session = SessionLocal()
@@ -323,9 +325,9 @@ def seed_tech4food_scenario(db_session: Optional[Session] = None) -> dict[str, A
                 priority="Urgent",
                 risk_assessment="Critical - mycotoxin residue above permissible limit with downstream paneer exposure.",
                 root_cause="Aflatoxin-contaminated cattle feed supplied to the Shirur catchment.",
-                capa_json='["Immediate Containment: quarantine MILK-101 and all derived paneer.", '
-                          '"Root Cause: test feed lots at contributing farms.", '
-                          '"Preventive Action: add Aflatoxin M1 screening at intake."]',
+                capa_json=["Immediate Containment: quarantine MILK-101 and all derived paneer.",
+                           "Root Cause: test feed lots at contributing farms.",
+                           "Preventive Action: add Aflatoxin M1 screening at intake."],
                 status="Committed",
                 created_at=base_date + timedelta(hours=8),
             ),
@@ -351,9 +353,9 @@ def seed_tech4food_scenario(db_session: Optional[Session] = None) -> dict[str, A
                 priority="High",
                 risk_assessment="High - possible microbial spoilage or cold-chain failure.",
                 root_cause="Cold-chain excursion or elevated acidity at processing.",
-                capa_json='["Immediate Containment: hold remaining PAN-201 stock at Retailer A.", '
-                          '"Root Cause: review reefer temperature logs.", '
-                          '"Preventive Action: tighten cold-chain monitoring."]',
+                capa_json=["Immediate Containment: hold remaining PAN-201 stock at Retailer A.",
+                           "Root Cause: review reefer temperature logs.",
+                           "Preventive Action: tighten cold-chain monitoring."],
                 status="Committed",
                 created_at=base_date + timedelta(hours=8, minutes=30),
             ),

@@ -12,6 +12,8 @@ import {
   MapPin,
   CheckCircle2,
 } from 'lucide-react';
+import { Badge, StatusBadge } from './ui';
+import { formatNumber, formatQuantity } from '../utils/format';
 
 export default function LineageGraph({
   batches = [],
@@ -77,7 +79,7 @@ export default function LineageGraph({
     };
   }, [activeFocus, links, distributions]);
 
-  // In compact mode, show only the selected batch's connected path; in full mode, show the complete plant genealogy with the active path highlighted.
+  // In compact mode, show only the selected batch's connected path
   const visibleBatchIds = useMemo(
     () => new Set([
       activeFocus,
@@ -87,14 +89,17 @@ export default function LineageGraph({
     ]),
     [activeFocus, relatedElements]
   );
+
   const visibleMilkBatches = useMemo(
     () => (compact ? rawMilkBatches.filter((batch) => visibleBatchIds.has(batch.id)) : rawMilkBatches),
     [compact, rawMilkBatches, visibleBatchIds]
   );
+
   const visiblePaneerBatches = useMemo(
     () => (compact ? finishedPaneerBatches.filter((batch) => visibleBatchIds.has(batch.id)) : finishedPaneerBatches),
     [compact, finishedPaneerBatches, visibleBatchIds]
   );
+
   const visibleDistributions = useMemo(
     () =>
       compact
@@ -102,29 +107,6 @@ export default function LineageGraph({
         : distributions,
     [compact, distributions, relatedElements]
   );
-
-  const getStatusBadge = (status) => {
-    switch (status) {
-      case 'RECALLED':
-        return {
-          bg: 'bg-red-50 text-red-700 border-red-200',
-          dot: 'bg-red-600',
-          label: 'Recalled',
-        };
-      case 'QUARANTINED':
-        return {
-          bg: 'bg-amber-50 text-amber-800 border-amber-200',
-          dot: 'bg-amber-500',
-          label: 'On Hold',
-        };
-      default:
-        return {
-          bg: 'bg-emerald-50 text-emerald-800 border-emerald-200',
-          dot: 'bg-emerald-600',
-          label: 'Safe & Fresh',
-        };
-    }
-  };
 
   const isHighlighted = (id) => {
     if (!activeFocus) return false;
@@ -136,52 +118,58 @@ export default function LineageGraph({
   };
 
   return (
-    <div className={compact ? 'space-y-5' : 'space-y-5 rounded-2xl border border-stone-200/90 bg-white p-5 shadow-sm sm:p-6'}>
+    <div className={compact ? 'space-y-4' : 'card card-pad space-y-5'}>
       {/* Header & Legend */}
-      {!compact && <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-stone-200/80 pb-4">
-        <div>
-          <h2 className="text-lg font-bold text-stone-900 tracking-tight">
-            Farm-to-Store Supply Chain Journey
-          </h2>
-          <p className="text-xs sm:text-sm text-stone-500 mt-0.5">
-            Select any milk collection or paneer batch to trace how fresh milk is blended, crafted into paneer, and delivered to stores.
-          </p>
-        </div>
+      {!compact && (
+        <div className="flex flex-col gap-4 border-b border-ink-200 pb-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <span className="eyebrow">Supply Chain Journey</span>
+            <h2 className="section-title text-xl mt-0.5">
+              Farm-to-Pack Dairy Lineage &amp; Retail Network
+            </h2>
+            <p className="muted mt-1 text-xs sm:text-sm">
+              Click or hover any batch to trace milk blending, vat aggregation, and retail dispatch.
+            </p>
+          </div>
 
-        {/* Plain-Language Status Legend */}
-        <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
-          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800">
-            <span className="w-2 h-2 rounded-full bg-emerald-600" /> Safe &amp; Fresh
-          </span>
-          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800">
-            <span className="w-2 h-2 rounded-full bg-amber-500" /> On Hold for Testing
-          </span>
-          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 border border-red-200 text-red-700">
-            <span className="w-2 h-2 rounded-full bg-red-600" /> Recalled
-          </span>
+          {/* Status Legend */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="badge badge-safe">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+              Active &amp; Safe
+            </span>
+            <span className="badge badge-warn">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+              On Quality Hold
+            </span>
+            <span className="badge badge-danger">
+              <span className="h-1.5 w-1.5 rounded-full bg-red-600" />
+              Recalled
+            </span>
+          </div>
         </div>
-      </div>}
+      )}
 
-      {/* Plain-English Active Focus Summary Bar */}
+      {/* Active Focus Summary Bar */}
       {focusedBatch && !compact && (
-        <div className="px-4 py-3 rounded-xl bg-[#FAF7F2] border border-stone-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs sm:text-sm">
-          <div className="flex items-center gap-2.5 text-stone-700 flex-wrap">
-            <span className="font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-lg">
+        <div className="flex flex-col gap-2 rounded-card border border-brand-200 bg-brand-50/40 px-4 py-3 text-xs sm:flex-row sm:items-center sm:justify-between sm:text-sm">
+          <div className="flex flex-wrap items-center gap-2 text-ink-700">
+            <span className="rounded-control bg-brand-800 px-2.5 py-0.5 font-mono text-xs font-bold text-white">
               Selected: {focusedBatch.id}
             </span>
-            <span className="font-semibold text-stone-800">{focusedBatch.facility_name}</span>
-            <span className="text-stone-400 hidden sm:inline">•</span>
+            <span className="font-semibold text-ink-900">{focusedBatch.facility_name}</span>
+            <span className="text-ink-400 hidden sm:inline">•</span>
             {focusedBatch.product_type === 'MILK' ? (
-              <span className="text-stone-600">
-                Used in{' '}
-                <strong className="text-stone-900">
+              <span className="text-ink-600">
+                Processed into{' '}
+                <strong className="text-ink-900">
                   {relatedElements.children.length} Paneer{' '}
                   {relatedElements.children.length === 1 ? 'Batch' : 'Batches'}
                 </strong>
                 {relatedElements.coInputs.length > 0 && (
                   <>
                     {' '}
-                    (blended with{' '}
+                    (co-blended with{' '}
                     <strong className="text-amber-800">
                       {relatedElements.coInputs.join(', ')}
                     </strong>
@@ -189,22 +177,22 @@ export default function LineageGraph({
                   </>
                 )}{' '}
                 and delivered to{' '}
-                <strong className="text-stone-900">
+                <strong className="text-ink-900">
                   {relatedElements.retailers.length} Retail{' '}
                   {relatedElements.retailers.length === 1 ? 'Store' : 'Stores'}
                 </strong>
                 .
               </span>
             ) : (
-              <span className="text-stone-600">
+              <span className="text-ink-600">
                 Crafted from{' '}
-                <strong className="text-stone-900">
+                <strong className="text-ink-900">
                   {relatedElements.parents.length > 0
                     ? relatedElements.parents.join(' + ')
                     : 'Direct Dairy Supply'}
                 </strong>{' '}
-                and delivered to{' '}
-                <strong className="text-stone-900">
+                and distributed to{' '}
+                <strong className="text-ink-900">
                   {relatedElements.retailers.length} Retail{' '}
                   {relatedElements.retailers.length === 1 ? 'Store' : 'Stores'}
                 </strong>
@@ -213,32 +201,32 @@ export default function LineageGraph({
             )}
           </div>
           <button
-            onClick={() => onViewPassport(focusedBatch.id)}
-            className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 self-start sm:self-auto whitespace-nowrap"
+            type="button"
+            onClick={() => onViewPassport?.(focusedBatch.id)}
+            className="flex items-center gap-1 font-semibold text-brand-800 hover:text-brand-950"
           >
-            <QrCode className="w-3.5 h-3.5" />
-            View Customer QR
+            <QrCode className="h-3.5 w-3.5" />
+            Public Passport
           </button>
         </div>
       )}
 
-      {/* 3-Step Dairy Journey Columns */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* 3 Columns: 1. Village Milk Collections -> 2. Paneer Processing -> 3. Retail Stores */}
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
         {/* STEP 1: Village Milk Collection */}
         <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-sky-50/70 border border-sky-200/70">
-            <span className="text-xs font-bold uppercase tracking-wide text-sky-900 flex items-center gap-2">
-              <Milk className="w-4 h-4 text-sky-700" />
-              1. Village Milk Collection
+          <div className="flex items-center justify-between rounded-control border border-sky-200 bg-sky-50 px-3 py-2">
+            <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-sky-950">
+              <Milk className="h-4 w-4 text-sky-700" />
+              1. Village Milk Collections
             </span>
-            <span className="text-xs font-semibold text-sky-800 bg-white px-2 py-0.5 rounded-md border border-sky-200/60">
-              {visibleMilkBatches.length} {visibleMilkBatches.length === 1 ? 'Batch' : 'Batches'}
+            <span className="rounded-control bg-white px-2 py-0.5 text-xs font-bold text-sky-900 border border-sky-200">
+              {visibleMilkBatches.length}
             </span>
           </div>
 
           <div className="space-y-3">
             {visibleMilkBatches.map((batch) => {
-              const statusInfo = getStatusBadge(batch.status);
               const highlighted = isHighlighted(batch.id);
               const isSelected = activeFocus === batch.id;
               const isCoInput = relatedElements.coInputs.includes(batch.id);
@@ -247,90 +235,78 @@ export default function LineageGraph({
               return (
                 <div
                   key={batch.id}
-                  onClick={() => onSelectBatch(batch.id)}
+                  onClick={() => onSelectBatch?.(batch.id)}
                   onMouseEnter={() => setHoveredId(batch.id)}
                   onMouseLeave={() => setHoveredId(null)}
-                  className={`p-4 rounded-xl border transition-all cursor-pointer ${
+                  className={`card p-4 transition cursor-pointer ${
                     batch.status === 'RECALLED'
-                      ? 'bg-red-50/60 border-red-300 ring-2 ring-red-500/15'
+                      ? 'border-red-300 bg-red-50/40 ring-2 ring-red-500/10'
                       : batch.status === 'QUARANTINED' || isCoInput
-                      ? 'bg-amber-50/60 border-amber-300 ring-2 ring-amber-500/15'
+                      ? 'border-amber-300 bg-amber-50/40 ring-2 ring-amber-500/10'
                       : isSelected
-                      ? 'bg-emerald-50/40 border-emerald-600 ring-2 ring-emerald-600/15 shadow-sm'
+                      ? 'border-brand-600 ring-2 ring-brand-600/20 shadow-sm bg-brand-50/20'
                       : highlighted
-                      ? 'bg-[#FAF7F2] border-emerald-400 shadow-sm'
-                      : 'bg-white border-stone-200 hover:border-stone-300'
+                      ? 'border-brand-400 bg-canvas'
+                      : 'hover:border-ink-400'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-bold text-sm text-stone-900">{batch.id}</span>
-                        <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-sky-50 text-sky-800 border border-sky-200/80">
-                          Fresh Chilled Milk
-                        </span>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="font-mono font-bold text-sm text-ink-900">{batch.id}</span>
+                        <span className="badge badge-info text-[10px] py-0 px-2">Raw Milk</span>
                         {isCoInput && batch.status === 'ACTIVE' && (
-                          <span className="text-[11px] font-semibold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md border border-amber-300">
-                            Blended in Same Vat
-                          </span>
+                          <span className="badge badge-warn text-[10px] py-0 px-2">Blended In Vat</span>
                         )}
                         {isParentOfSelected && (
-                          <span className="text-[11px] font-semibold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md border border-emerald-300">
-                            Source Milk
-                          </span>
+                          <span className="badge badge-safe text-[10px] py-0 px-2">Source Milk</span>
                         )}
                       </div>
-                      <p className="text-xs font-medium text-stone-600 mt-1 flex items-center gap-1">
-                        <MapPin className="w-3.5 h-3.5 text-stone-400 flex-shrink-0" />
-                        <span>{batch.facility_name}</span>
+                      <p className="mt-1 flex items-center gap-1 text-xs text-ink-600">
+                        <MapPin className="h-3.5 w-3.5 shrink-0 text-ink-400" />
+                        <span className="truncate max-w-[190px]">{batch.facility_name}</span>
                       </p>
                     </div>
 
-                    <span
-                      className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 flex-shrink-0 ${statusInfo.bg}`}
-                    >
-                      <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dot}`} />
-                      {statusInfo.label}
-                    </span>
+                    <StatusBadge status={batch.status} />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 mt-3 pt-2.5 border-t border-stone-200/70 text-xs">
+                  <div className="mt-3 grid grid-cols-2 gap-2 border-t border-ink-100 pt-2 text-xs">
                     <div>
-                      <span className="text-[11px] text-stone-500 block">Collected Volume</span>
-                      <p className="font-bold text-stone-800">
-                        {batch.initial_quantity.toLocaleString()} Liters
-                      </p>
+                      <span className="block text-[10px] font-semibold text-ink-500 uppercase">Volume</span>
+                      <p className="font-bold text-ink-900">{formatQuantity(batch.initial_quantity, 'MILK')}</p>
                     </div>
                     <div>
-                      <span className="text-[11px] text-stone-500 block">Unprocessed Stock</span>
-                      <p className="font-semibold text-stone-700">
+                      <span className="block text-[10px] font-semibold text-ink-500 uppercase">Remaining</span>
+                      <p className="font-semibold text-ink-700">
                         {batch.remaining_quantity > 0
-                          ? `${batch.remaining_quantity} L in chiller`
-                          : 'Fully processed'}
+                          ? formatQuantity(batch.remaining_quantity, 'MILK')
+                          : 'Processed'}
                       </p>
                     </div>
                   </div>
 
-                  {/* Card Footer Actions */}
-                  <div className="flex items-center justify-between mt-3 pt-2 border-t border-stone-200/60">
+                  <div className="mt-3 flex items-center justify-between border-t border-ink-100 pt-2 text-xs">
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onViewPassport(batch.id);
+                        onViewPassport?.(batch.id);
                       }}
-                      className="text-xs text-emerald-700 hover:text-emerald-800 flex items-center gap-1 font-semibold"
+                      className="flex items-center gap-1 font-semibold text-brand-800 hover:text-brand-950"
                     >
-                      <QrCode className="w-3.5 h-3.5" /> Customer QR
+                      <QrCode className="h-3.5 w-3.5" /> Passport
                     </button>
 
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onOpenRecallModal(batch.id);
+                        onOpenRecallModal?.(batch.id);
                       }}
-                      className="text-xs text-red-600 hover:text-red-700 flex items-center gap-1 font-semibold"
+                      className="flex items-center gap-1 font-semibold text-red-700 hover:text-red-900"
                     >
-                      <ShieldAlert className="w-3.5 h-3.5" /> Safety Check
+                      <ShieldAlert className="h-3.5 w-3.5" /> Recall
                     </button>
                   </div>
                 </div>
@@ -339,101 +315,90 @@ export default function LineageGraph({
           </div>
         </div>
 
-        {/* STEP 2: Dairy Plant — Paneer Crafting */}
+        {/* STEP 2: Paneer Crafting */}
         <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-amber-50/80 border border-amber-200/80">
-            <span className="text-xs font-bold uppercase tracking-wide text-amber-900 flex items-center gap-2">
-              <Package className="w-4 h-4 text-amber-700" />
-              2. Paneer Crafting (Dairy Plant)
+          <div className="flex items-center justify-between rounded-control border border-amber-200 bg-amber-50 px-3 py-2">
+            <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-amber-950">
+              <Package className="h-4 w-4 text-amber-700" />
+              2. Paneer Processing (Dairy Plant)
             </span>
-            <span className="text-xs font-semibold text-amber-900 bg-white px-2 py-0.5 rounded-md border border-amber-200/70">
-              {visiblePaneerBatches.length} {visiblePaneerBatches.length === 1 ? 'Batch' : 'Batches'}
+            <span className="rounded-control bg-white px-2 py-0.5 text-xs font-bold text-amber-900 border border-amber-200">
+              {visiblePaneerBatches.length}
             </span>
           </div>
 
           <div className="space-y-3">
             {visiblePaneerBatches.map((batch) => {
-              const statusInfo = getStatusBadge(batch.status);
               const highlighted = isHighlighted(batch.id);
               const isSelected = activeFocus === batch.id;
               const isChildOfSelected = relatedElements.children.includes(batch.id);
-
-              // Find milk batches blended into this paneer batch
               const inputs = links.filter((l) => l.child_batch_id === batch.id);
 
               return (
                 <div
                   key={batch.id}
-                  onClick={() => onSelectBatch(batch.id)}
+                  onClick={() => onSelectBatch?.(batch.id)}
                   onMouseEnter={() => setHoveredId(batch.id)}
                   onMouseLeave={() => setHoveredId(null)}
-                  className={`p-4 rounded-xl border transition-all cursor-pointer ${
+                  className={`card p-4 transition cursor-pointer ${
                     batch.status === 'RECALLED'
-                      ? 'bg-red-50/60 border-red-300 ring-2 ring-red-500/15'
+                      ? 'border-red-300 bg-red-50/40 ring-2 ring-red-500/10'
                       : batch.status === 'QUARANTINED'
-                      ? 'bg-amber-50/60 border-amber-300 ring-2 ring-amber-500/15'
+                      ? 'border-amber-300 bg-amber-50/40 ring-2 ring-amber-500/10'
                       : isSelected
-                      ? 'bg-emerald-50/40 border-emerald-600 ring-2 ring-emerald-600/15 shadow-sm'
+                      ? 'border-brand-600 ring-2 ring-brand-600/20 shadow-sm bg-brand-50/20'
                       : highlighted
-                      ? 'bg-[#FAF7F2] border-emerald-400 shadow-sm'
-                      : 'bg-white border-stone-200 hover:border-stone-300'
+                      ? 'border-brand-400 bg-canvas'
+                      : 'hover:border-ink-400'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-bold text-sm text-stone-900">{batch.id}</span>
-                        <span className="text-[11px] font-medium bg-amber-50 text-amber-900 px-2 py-0.5 rounded-md border border-amber-200/80">
-                          Malai Paneer
-                        </span>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="font-mono font-bold text-sm text-ink-900">{batch.id}</span>
+                        <span className="badge badge-warn text-[10px] py-0 px-2">Malai Paneer</span>
                         {isChildOfSelected && batch.status !== 'RECALLED' && (
-                          <span className="text-[11px] font-semibold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md border border-emerald-300">
-                            Made from {activeFocus}
-                          </span>
+                          <span className="badge badge-safe text-[10px] py-0 px-2">From {activeFocus}</span>
                         )}
                       </div>
-                      <p className="text-xs font-medium text-stone-600 mt-1 line-clamp-1">
-                        {batch.facility_name}
+                      <p className="mt-1 flex items-center gap-1 text-xs text-ink-600">
+                        <MapPin className="h-3.5 w-3.5 shrink-0 text-ink-400" />
+                        <span className="truncate max-w-[190px]">{batch.facility_name}</span>
                       </p>
                     </div>
 
-                    <span
-                      className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 flex-shrink-0 ${statusInfo.bg}`}
-                    >
-                      <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dot}`} />
-                      {statusInfo.label}
-                    </span>
+                    <StatusBadge status={batch.status} />
                   </div>
 
-                  {/* Milk Recipe / Blend Breakdown */}
-                  <div className="mt-3 pt-2.5 border-t border-stone-200/70">
-                    <span className="text-[11px] text-stone-500 font-semibold block mb-1.5">
-                      Milk Blended into This Batch:
+                  {/* Input Milk Batches */}
+                  <div className="mt-3 border-t border-ink-100 pt-2">
+                    <span className="block text-[10px] font-semibold text-ink-500 uppercase mb-1">
+                      Source Milk In Vat:
                     </span>
-                    <div className="flex flex-wrap gap-1.5">
+                    <div className="flex flex-wrap gap-1">
                       {inputs.map((inp) => (
                         <span
                           key={inp.id}
-                          className="text-xs px-2.5 py-1 rounded-lg bg-[#FAF7F2] text-stone-800 border border-stone-200/90 flex items-center gap-1.5 font-medium"
+                          className="inline-flex items-center gap-1 rounded bg-ink-100 px-2 py-0.5 text-[11px] font-medium text-ink-800"
                         >
-                          <Milk className="w-3 h-3 text-sky-700" />
-                          <span className="font-bold text-stone-900">{inp.parent_batch_id}</span>
-                          <span className="text-stone-500">({inp.quantity_used} {inp.unit})</span>
+                          <Milk className="h-3 w-3 text-sky-700" />
+                          <span className="font-bold">{inp.parent_batch_id}</span>
+                          <span className="text-ink-500">({inp.quantity_used} L)</span>
                         </span>
                       ))}
                       {inputs.length === 0 && (
-                        <span className="text-xs text-stone-400 italic">Direct farm milk</span>
+                        <span className="text-[11px] italic text-ink-400">Direct collection</span>
                       )}
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 mt-3 pt-2.5 border-t border-stone-200/70 text-xs">
+                  <div className="mt-3 grid grid-cols-2 gap-2 border-t border-ink-100 pt-2 text-xs">
                     <div>
-                      <span className="text-[11px] text-stone-500 block">Paneer Produced</span>
-                      <p className="font-bold text-stone-800">{batch.initial_quantity} kg</p>
+                      <span className="block text-[10px] font-semibold text-ink-500 uppercase">Yield</span>
+                      <p className="font-bold text-ink-900">{formatQuantity(batch.initial_quantity, 'PANEER')}</p>
                     </div>
                     <div>
-                      <span className="text-[11px] text-stone-500 block">Quality Clearance</span>
+                      <span className="block text-[10px] font-semibold text-ink-500 uppercase">Quality</span>
                       <p
                         className={`text-xs font-bold ${
                           batch.status === 'RECALLED'
@@ -444,34 +409,35 @@ export default function LineageGraph({
                         }`}
                       >
                         {batch.status === 'RECALLED'
-                          ? 'Withdrawn from Sale'
+                          ? 'Recalled'
                           : batch.status === 'QUARANTINED'
-                          ? 'Under Inspection'
-                          : 'Approved for Sale'}
+                          ? 'On Hold'
+                          : 'Approved'}
                       </p>
                     </div>
                   </div>
 
-                  {/* Actions */}
-                  <div className="flex items-center justify-between mt-3 pt-2 border-t border-stone-200/60">
+                  <div className="mt-3 flex items-center justify-between border-t border-ink-100 pt-2 text-xs">
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onViewPassport(batch.id);
+                        onViewPassport?.(batch.id);
                       }}
-                      className="text-xs text-emerald-700 hover:text-emerald-800 flex items-center gap-1 font-semibold"
+                      className="flex items-center gap-1 font-semibold text-brand-800 hover:text-brand-950"
                     >
-                      <QrCode className="w-3.5 h-3.5" /> Customer QR
+                      <QrCode className="h-3.5 w-3.5" /> Passport
                     </button>
 
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onOpenRecallModal(batch.id);
+                        onOpenRecallModal?.(batch.id);
                       }}
-                      className="text-xs text-red-600 hover:text-red-700 flex items-center gap-1 font-semibold"
+                      className="flex items-center gap-1 font-semibold text-red-700 hover:text-red-900"
                     >
-                      <ShieldAlert className="w-3.5 h-3.5" /> Safety Check
+                      <ShieldAlert className="h-3.5 w-3.5" /> Recall
                     </button>
                   </div>
                 </div>
@@ -480,15 +446,15 @@ export default function LineageGraph({
           </div>
         </div>
 
-        {/* STEP 3: Local Retail Stores */}
+        {/* STEP 3: Retail Stores */}
         <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-emerald-50/80 border border-emerald-200/80">
-            <span className="text-xs font-bold uppercase tracking-wide text-emerald-900 flex items-center gap-2">
-              <Store className="w-4 h-4 text-emerald-700" />
+          <div className="flex items-center justify-between rounded-control border border-emerald-200 bg-emerald-50 px-3 py-2">
+            <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-emerald-950">
+              <Store className="h-4 w-4 text-emerald-700" />
               3. Local Retail Stores
             </span>
-            <span className="text-xs font-semibold text-emerald-900 bg-white px-2 py-0.5 rounded-md border border-emerald-200/70">
-              {visibleDistributions.length} {visibleDistributions.length === 1 ? 'Store' : 'Stores'}
+            <span className="rounded-control bg-white px-2 py-0.5 text-xs font-bold text-emerald-900 border border-emerald-200">
+              {visibleDistributions.length}
             </span>
           </div>
 
@@ -502,71 +468,67 @@ export default function LineageGraph({
               return (
                 <div
                   key={dist.id}
-                  onClick={() => onSelectBatch(dist.batch_id)}
-                  className={`p-4 rounded-xl border transition-all cursor-pointer ${
+                  onClick={() => onSelectBatch?.(dist.batch_id)}
+                  className={`card p-4 transition cursor-pointer ${
                     isRecalled
-                      ? 'bg-red-50/70 border-red-300 shadow-sm'
+                      ? 'border-red-300 bg-red-50/50'
                       : isQuarantined
-                      ? 'bg-amber-50/60 border-amber-300'
+                      ? 'border-amber-300 bg-amber-50/40'
                       : isRelated
-                      ? 'bg-[#FAF7F2] border-emerald-400 shadow-sm'
-                      : 'bg-white border-stone-200 hover:border-stone-300'
+                      ? 'border-brand-400 bg-canvas'
+                      : 'hover:border-ink-400'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <span className="font-bold text-sm text-stone-900 flex items-center gap-1.5">
-                        <Store className="w-4 h-4 text-emerald-700 flex-shrink-0" />
+                      <span className="flex items-center gap-1.5 font-bold text-sm text-ink-900">
+                        <Store className="h-4 w-4 text-brand-700 shrink-0" />
                         {dist.destination_name}
                       </span>
-                      <p className="text-xs text-stone-500 mt-0.5 flex items-center gap-1">
-                        <MapPin className="w-3 h-3 text-stone-400" />
-                        {dist.location}
+                      <p className="mt-0.5 flex items-center gap-1 text-xs text-ink-500">
+                        <MapPin className="h-3 w-3 text-ink-400 shrink-0" />
+                        <span>{dist.location}</span>
                       </p>
                     </div>
 
                     {isRecalled ? (
-                      <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 border border-red-300 flex items-center gap-1">
-                        <ShieldAlert className="w-3 h-3 text-red-700" /> Recall Alert
+                      <span className="badge badge-danger text-[10px]">
+                        <ShieldAlert className="h-3 w-3" /> Recall Alert
                       </span>
                     ) : isRelated ? (
-                      <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
-                        Receives Batch
-                      </span>
+                      <span className="badge badge-safe text-[10px]">Active Recipient</span>
                     ) : (
-                      <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-stone-100 text-stone-700 border border-stone-200">
-                        Open &amp; Safe
-                      </span>
+                      <span className="badge badge-neutral text-[10px]">Clear</span>
                     )}
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 mt-3 pt-2.5 border-t border-stone-200/70 text-xs">
+                  <div className="mt-3 grid grid-cols-2 gap-2 border-t border-ink-100 pt-2 text-xs">
                     <div>
-                      <span className="text-[11px] text-stone-500 block">Paneer Batch</span>
-                      <p className="font-bold text-stone-900">{dist.batch_id}</p>
+                      <span className="block text-[10px] font-semibold text-ink-500 uppercase">Batch</span>
+                      <p className="font-mono font-bold text-ink-900">{dist.batch_id}</p>
                     </div>
                     <div>
-                      <span className="text-[11px] text-stone-500 block">Quantity Delivered</span>
-                      <p className="font-bold text-stone-800">{dist.quantity_dispatched} kg</p>
+                      <span className="block text-[10px] font-semibold text-ink-500 uppercase">Quantity</span>
+                      <p className="font-bold text-ink-800">{dist.quantity_dispatched} kg</p>
                     </div>
                   </div>
 
-                  <div className="mt-3 pt-2 border-t border-stone-200/60 flex items-center justify-between text-xs">
-                    <span className="text-stone-600 font-medium flex items-center gap-1">
-                      <Phone className="w-3 h-3 text-stone-400" />
+                  <div className="mt-3 flex items-center justify-between border-t border-ink-100 pt-2 text-xs">
+                    <span className="flex items-center gap-1 font-mono text-ink-600">
+                      <Phone className="h-3 w-3 text-ink-400" />
                       {dist.contact_phone}
                     </span>
                     {isRecalled ? (
                       <a
                         href={`tel:${dist.contact_phone}`}
                         onClick={(e) => e.stopPropagation()}
-                        className="text-xs font-bold text-red-700 hover:text-red-800 underline"
+                        className="font-bold text-red-700 hover:underline"
                       >
-                        Call Store Now
+                        Notify Store
                       </a>
                     ) : (
-                      <span className="text-[11px] text-emerald-700 font-medium flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3" /> Verified Delivery
+                      <span className="flex items-center gap-1 text-emerald-700 font-medium">
+                        <CheckCircle2 className="h-3 w-3" /> Delivered
                       </span>
                     )}
                   </div>

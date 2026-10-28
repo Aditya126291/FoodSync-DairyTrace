@@ -4,7 +4,8 @@ import uuid
 from typing import Any, Optional
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import or_
+from sqlalchemy import or_, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -128,15 +129,28 @@ def link_batches(payload: BatchLinkCreate, db: Session = Depends(get_db)) -> dic
                 detail=f"Linking '{parent_id}' -> '{payload.child_batch_id}' would create a cycle in the genealogy graph.",
             )
 
+        if db.query(BatchLink.id).filter_by(parent_batch_id=parent_id, child_batch_id=payload.child_batch_id).first():
+            raise HTTPException(status_code=409, detail=f"Batch '{parent_id}' is already linked to '{payload.child_batch_id}'.")
+
         link = BatchLink(
             parent_batch_id=parent_id,
             child_batch_id=payload.child_batch_id,
             quantity_used=qty_used,
             unit=unit,
         )
-        parent_batch.remaining_quantity = max(0.0, round(parent_batch.remaining_quantity - qty_used, 4))
+        stock_update = db.execute(
+            update(Batch)
+            .where(Batch.id == parent_id, Batch.remaining_quantity >= qty_used)
+            .values(remaining_quantity=Batch.remaining_quantity - qty_used)
+        )
+        if stock_update.rowcount != 1:
+            raise HTTPException(status_code=409, detail=f"Batch '{parent_id}' does not have enough remaining quantity.")
         db.add(link)
-        db.flush()
+        try:
+            db.flush()
+        except IntegrityError as error:
+            db.rollback()
+            raise HTTPException(status_code=409, detail="This batch link conflicts with an existing genealogy record.") from error
         created_links.append(link.to_dict())
 
     db.commit()
@@ -220,7 +234,13 @@ def create_distribution_record(payload: DistributionRecordCreate, db: Session = 
         contact_phone=payload.contact_phone,
         dispatched_at=payload.dispatched_at,
     )
-    batch.remaining_quantity = max(0.0, round(batch.remaining_quantity - payload.quantity_dispatched, 4))
+    stock_update = db.execute(
+        update(Batch)
+        .where(Batch.id == payload.batch_id, Batch.remaining_quantity >= payload.quantity_dispatched)
+        .values(remaining_quantity=Batch.remaining_quantity - payload.quantity_dispatched)
+    )
+    if stock_update.rowcount != 1:
+        raise HTTPException(status_code=409, detail=f"Batch '{payload.batch_id}' does not have enough remaining quantity.")
     db.add(record)
     db.commit()
     db.refresh(record)

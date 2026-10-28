@@ -1,6 +1,5 @@
 """Smart Recall Engine Endpoints (Simulate, Execute, History, FSSAI Export)."""
 
-import json
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import HTMLResponse
@@ -115,14 +114,8 @@ def get_recall_history(db: Session = Depends(get_db)) -> list[dict[str, Any]]:
     events = db.query(RecallEvent).order_by(RecallEvent.created_at.desc(), RecallEvent.id.desc()).all()
     results = []
     for ev in events:
-        try:
-            aff_batches = json.loads(ev.affected_batches_json or "[]")
-        except (json.JSONDecodeError, TypeError):
-            aff_batches = []
-        try:
-            aff_dests = json.loads(ev.affected_destinations_json or "[]")
-        except (json.JSONDecodeError, TypeError):
-            aff_dests = []
+        aff_batches = ev.affected_batches_json if isinstance(ev.affected_batches_json, list) else []
+        aff_dests = ev.affected_destinations_json if isinstance(ev.affected_destinations_json, list) else []
         results.append({
             **ev.to_dict(),
             "affected_batches": aff_batches,

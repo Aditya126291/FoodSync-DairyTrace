@@ -189,6 +189,19 @@ def test_quality_and_distribution_endpoints(client=None):
         assert dist_list.status_code == 200
         assert len(dist_list.json()) == 2
 
+        overdrawn_dist = c.post(
+            "/api/distribution",
+            json={
+                "batch_id": "PAN-303",
+                "destination_name": "Retailer Overdraw Test",
+                "destination_type": "RETAILER",
+                "location": "Pune, MH",
+                "quantity_dispatched": 151.0,
+                "contact_phone": "+91-9822011104",
+            },
+        )
+        assert overdrawn_dist.status_code == 409
+
         new_dist = c.post(
             "/api/distribution",
             json={
